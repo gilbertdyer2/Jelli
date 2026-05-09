@@ -1,0 +1,4136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>jelli — Audio Visualizer</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #050510;
+    overflow: hidden;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+  }
+
+  canvas#canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: block;
+  }
+
+  /* ── Top bar ──────────────────────────────────────────────────── */
+  #ui-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    background: rgba(5, 5, 20, 0.72);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(100, 180, 255, 0.12);
+    z-index: 10;
+  }
+
+  #ui-bar select {
+    flex: 1;
+    max-width: 380px;
+    background: rgba(10, 10, 30, 0.9);
+    color: #a8c8ff;
+    border: 1px solid rgba(100, 180, 255, 0.25);
+    border-radius: 5px;
+    padding: 4px 8px;
+    font-size: 12px;
+    outline: none;
+    cursor: pointer;
+  }
+  #ui-bar select:hover { border-color: rgba(100, 180, 255, 0.55); }
+
+  #play-btn {
+    background: rgba(0, 200, 255, 0.12);
+    color: #00c8ff;
+    border: 1px solid rgba(0, 200, 255, 0.35);
+    border-radius: 5px;
+    padding: 5px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+  #play-btn:hover { background: rgba(0, 200, 255, 0.22); border-color: rgba(0, 200, 255, 0.65); }
+
+  #live-btn {
+    background: rgba(0, 210, 120, 0.10);
+    color: #00d878;
+    border: 1px solid rgba(0, 210, 120, 0.30);
+    border-radius: 5px;
+    padding: 5px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    white-space: nowrap;
+  }
+  #live-btn:hover  { background: rgba(0, 210, 120, 0.20); border-color: rgba(0, 210, 120, 0.60); }
+  #live-btn.active { background: rgba(0, 210, 120, 0.28); border-color: rgba(0, 210, 120, 0.75); color: #40ffaa; }
+
+  /* ── Spawn modal ─────────────────────────────────────────────────── */
+  #spawn-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(2, 2, 14, 0.80);
+    backdrop-filter: blur(6px);
+    z-index: 50;
+    align-items: center;
+    justify-content: center;
+  }
+  #spawn-modal.open { display: flex; }
+  #spawn-card {
+    background: rgba(8, 8, 28, 0.97);
+    border: 1px solid rgba(100, 180, 255, 0.22);
+    border-radius: 10px;
+    padding: 18px 20px 14px;
+    width: 300px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  }
+  #spawn-card h3 {
+    color: #a8c8ff;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .sp-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .sp-lbl {
+    color: rgba(150, 195, 240, 0.75);
+    font-size: 11px;
+    width: 78px;
+    flex-shrink: 0;
+  }
+  .sp-row input[type=range] { flex: 1; }
+  .sp-row input[type=number],
+  .sp-row input[type=text],
+  .sp-row select {
+    flex: 1;
+    background: rgba(10,10,30,0.9);
+    color: #a8c8ff;
+    border: 1px solid rgba(100,180,255,0.22);
+    border-radius: 4px;
+    padding: 3px 7px;
+    font-size: 12px;
+    font-family: inherit;
+    outline: none;
+  }
+  .sp-row input[type=color] {
+    width: 38px; height: 24px;
+    border: 1px solid rgba(100,180,255,0.22);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+    padding: 1px;
+  }
+  .sp-val {
+    color: rgba(130,170,215,0.65);
+    font-size: 10px;
+    width: 32px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+  #spawn-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    justify-content: flex-end;
+  }
+  #spawn-ok, #spawn-cancel {
+    border-radius: 5px;
+    padding: 5px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    border: 1px solid;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  #spawn-ok     { background: rgba(0,200,255,0.13); color: #00c8ff; border-color: rgba(0,200,255,0.38); }
+  #spawn-ok:hover { background: rgba(0,200,255,0.24); }
+  #spawn-cancel { background: rgba(180,180,200,0.05); color: rgba(170,180,210,0.65); border-color: rgba(180,180,200,0.18); }
+  #spawn-cancel:hover { background: rgba(180,180,200,0.11); }
+
+  /* ── Jellyfish chips ─────────────────────────────────────────────── */
+  #jelli-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  #jelli-list-label {
+    width: 100%;
+    color: rgba(140, 170, 215, 0.40);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+  }
+  .jelli-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 20px;
+    padding: 2px 7px 2px 6px;
+    font-size: 11px;
+    color: rgba(190,215,255,0.75);
+  }
+  .jelli-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .jelli-remove {
+    background: none;
+    border: none;
+    color: rgba(170,170,200,0.38);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+    line-height: 1;
+    font-family: inherit;
+    margin-left: 1px;
+  }
+  .jelli-remove:hover { color: rgba(255,90,90,0.85); }
+
+  #clam-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  #clam-list-label {
+    width: 100%;
+    color: rgba(140, 170, 215, 0.40);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 3px;
+  }
+  .clam-chip {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255,255,255,0.035);
+    border: 1px solid rgba(255,255,255,0.09);
+    border-radius: 20px;
+    padding: 2px 7px 2px 6px;
+    font-size: 11px;
+    color: rgba(190,215,255,0.75);
+  }
+  .clam-dot {
+    width: 7px; height: 7px;
+    border-radius: 2px;
+    transform: rotate(45deg);
+    flex-shrink: 0;
+  }
+  .clam-remove {
+    background: none;
+    border: none;
+    color: rgba(170,170,200,0.38);
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+    line-height: 1;
+    font-family: inherit;
+    margin-left: 1px;
+  }
+  .clam-remove:hover { color: rgba(255,90,90,0.85); }
+
+  #status {
+    color: rgba(150, 180, 220, 0.7);
+    font-size: 11px;
+    white-space: nowrap;
+    min-width: 80px;
+  }
+
+  /* ── Bottom panel ─────────────────────────────────────────────── */
+  #bottom-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: 24px;
+    background: rgba(4, 4, 18, 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(100, 180, 255, 0.12);
+    z-index: 10;
+    transition: height 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  #bottom-panel.open  { max-height: calc(100vh - 85px); }
+  #bottom-panel.resizing { transition: none; }
+
+  /* Drag handle — thin strip at the very top of the panel */
+  #panel-resize {
+    height: 5px;
+    cursor: ns-resize;
+    flex-shrink: 0;
+    background: transparent;
+    transition: background 0.15s;
+  }
+  #panel-resize:hover { background: rgba(100, 180, 255, 0.08); }
+
+  /* Header row: toggle chevron + tab strip */
+  #panel-header {
+    flex-shrink: 0;
+    height: 24px;
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid rgba(100, 180, 255, 0.07);
+  }
+  #panel-toggle {
+    width: 28px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(140, 170, 215, 0.55);
+    font-size: 9px;
+    user-select: none;
+    border-right: 1px solid rgba(100, 180, 255, 0.07);
+    transition: color 0.15s, background 0.15s;
+  }
+  #panel-toggle:hover {
+    color: rgba(160, 200, 255, 0.95);
+    background: rgba(100, 180, 255, 0.04);
+  }
+  #panel-arrow {
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-block;
+  }
+  #bottom-panel.open #panel-arrow { transform: rotate(180deg); }
+
+  #panel-tabs {
+    display: flex;
+    align-items: stretch;
+    padding: 0 4px;
+    gap: 2px;
+  }
+  .panel-tab {
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: rgba(140, 170, 215, 0.42);
+    font-size: 11px;
+    padding: 0 13px;
+    cursor: pointer;
+    font-family: inherit;
+    letter-spacing: 0.04em;
+    align-self: stretch;
+    transition: color 0.15s;
+  }
+  .panel-tab:hover { color: rgba(160, 200, 255, 0.75); }
+  .panel-tab.active {
+    color: rgba(160, 200, 255, 0.95);
+    border-bottom-color: rgba(100, 180, 255, 0.5);
+  }
+
+  /* Tab content */
+  #panel-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    min-height: 0;
+  }
+  .tab-pane {
+    display: none;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .tab-pane.active { display: flex; }
+
+  /* Controls tab — left creatures column + right sliders column */
+  #tab-controls { flex-direction: row; }
+
+  #creatures-panel {
+    width: 195px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid rgba(100, 180, 255, 0.08);
+    overflow-y: auto;
+    padding: 8px 10px;
+    gap: 10px;
+  }
+  #creatures-panel::-webkit-scrollbar { width: 3px; }
+  #creatures-panel::-webkit-scrollbar-track { background: transparent; }
+  #creatures-panel::-webkit-scrollbar-thumb { background: rgba(100, 180, 255, 0.18); border-radius: 2px; }
+
+  .creature-section { display: flex; flex-direction: column; gap: 5px; }
+
+  .creature-spawn-btn {
+    background: rgba(100, 180, 255, 0.06);
+    color: rgba(140, 180, 240, 0.65);
+    border: 1px solid rgba(100, 180, 255, 0.15);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    text-align: left;
+    transition: background 0.15s, color 0.15s;
+    flex-shrink: 0;
+  }
+  .creature-spawn-btn:hover {
+    background: rgba(100, 180, 255, 0.13);
+    color: rgba(180, 210, 255, 0.95);
+  }
+
+  /* Analysis tab — same three-column layout as the old panel content */
+  #tab-analysis {
+    flex-direction: row;
+    gap: 14px;
+    padding: 8px 14px 10px;
+  }
+
+  /* EQ section */
+  #eq-section {
+    display: flex;
+    flex-direction: column;
+    width: 50%;
+    flex-shrink: 0;
+    min-width: 0;
+    min-height: 0;
+  }
+  #eq-label {
+    color: rgba(140, 170, 215, 0.45);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin-bottom: 5px;
+  }
+  #eq-canvas {
+    flex: 1;
+    width: 100%;
+    display: block;
+    border-radius: 3px;
+    background: #020208;
+    border: 1px solid rgba(100, 180, 255, 0.07);
+  }
+
+  /* Log section */
+  #log-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+  #log-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 5px;
+  }
+  #log-header span {
+    color: rgba(140, 170, 215, 0.45);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+  }
+  #clear-log-btn {
+    background: transparent;
+    color: rgba(140, 170, 215, 0.38);
+    border: 1px solid rgba(100, 180, 255, 0.14);
+    border-radius: 3px;
+    padding: 1px 8px;
+    font-size: 10px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.15s, border-color 0.15s;
+  }
+  #clear-log-btn:hover {
+    color: rgba(160, 200, 255, 0.85);
+    border-color: rgba(100, 180, 255, 0.35);
+  }
+  #beat-log {
+    flex: 1;
+    overflow-y: auto;
+    font-size: 11px;
+    font-family: 'Consolas', 'Cascadia Code', 'Courier New', monospace;
+    line-height: 1.6;
+    padding-right: 4px;
+  }
+  #beat-log::-webkit-scrollbar { width: 4px; }
+  #beat-log::-webkit-scrollbar-track { background: transparent; }
+  #beat-log::-webkit-scrollbar-thumb { background: rgba(100, 180, 255, 0.18); border-radius: 2px; }
+
+  .log-entry { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .log-time   { color: rgba(120, 150, 190, 0.38); }
+  .log-det    { font-weight: 600; }
+  .log-ivl    { color: rgba(120, 150, 190, 0.4); font-size: 10px; }
+
+  /* ── Detector graphs ──────────────────────────────────────────── */
+  #graphs-section {
+    width: 200px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    border-left: 1px solid rgba(100, 180, 255, 0.08);
+    padding-left: 12px;
+  }
+  #graphs-label {
+    color: rgba(140, 170, 215, 0.45);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin-bottom: 5px;
+    flex-shrink: 0;
+  }
+  #graphs-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .det-graph-row {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .det-graph-lbl {
+    font-size: 9px;
+    flex-shrink: 0;
+    margin-bottom: 2px;
+    letter-spacing: 0.04em;
+    font-family: 'Consolas', 'Cascadia Code', monospace;
+  }
+  .det-graph-cv {
+    flex: 1;
+    width: 100%;
+    display: block;
+    background: #020208;
+    border-radius: 2px;
+    border: 1px solid rgba(100, 180, 255, 0.07);
+  }
+
+  /* ── Playback bar ─────────────────────────────────────────────── */
+  #playback-bar {
+    position: fixed;
+    top: 44px; left: 0; right: 0;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 14px;
+    background: rgba(4, 4, 18, 0.78);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(100, 180, 255, 0.08);
+    z-index: 10;
+  }
+
+  .pb-time {
+    color: rgba(150, 180, 220, 0.5);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    min-width: 34px;
+    font-family: 'Consolas', 'Cascadia Code', monospace;
+  }
+  #time-total { text-align: right; }
+
+  #scrub-track {
+    flex: 1;
+    height: 16px;
+    position: relative;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+  }
+  #scrub-rail {
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: rgba(100, 180, 255, 0.13);
+    border-radius: 2px;
+    pointer-events: none;
+  }
+  #scrub-fill {
+    position: absolute;
+    left: 0;
+    height: 3px;
+    width: 0%;
+    background: rgba(0, 200, 255, 0.72);
+    border-radius: 2px;
+    pointer-events: none;
+    transition: width 0.08s linear;
+  }
+  #scrub-track.is-scrubbing #scrub-fill { transition: none; }
+
+  #scrub-thumb {
+    position: absolute;
+    top: 50%;
+    left: 0%;
+    width: 11px; height: 11px;
+    background: #00c8ff;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.12s;
+    box-shadow: 0 0 6px rgba(0, 200, 255, 0.55);
+  }
+  #scrub-track:hover #scrub-thumb,
+  #scrub-track.is-scrubbing #scrub-thumb { opacity: 1; }
+
+  /* ── Sliders panel ────────────────────────────────────────────── */
+  #sliders-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    border-left: 1px solid rgba(100, 180, 255, 0.08);
+    padding: 8px 0 10px 12px;
+  }
+  #sliders-header-label {
+    color: rgba(140, 170, 215, 0.45);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    margin-bottom: 6px;
+    flex-shrink: 0;
+  }
+  #sliders-scroll {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  #sliders-scroll::-webkit-scrollbar { width: 3px; }
+  #sliders-scroll::-webkit-scrollbar-track { background: transparent; }
+  #sliders-scroll::-webkit-scrollbar-thumb { background: rgba(100, 180, 255, 0.18); border-radius: 2px; }
+
+  .ctrl-group { margin-bottom: 7px; }
+  .ctrl-group-label {
+    color: rgba(120, 155, 210, 0.42);
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    padding-bottom: 3px;
+    margin-bottom: 3px;
+    border-bottom: 1px solid rgba(100, 180, 255, 0.07);
+  }
+  .ctrl-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin-bottom: 4px;
+  }
+  .ctrl-label {
+    flex: 1;
+    color: rgba(160, 190, 230, 0.62);
+    font-size: 10px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  .ctrl-slider {
+    width: 62px;
+    flex-shrink: 0;
+    height: 2px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: rgba(80, 140, 220, 0.22);
+    border-radius: 1px;
+    outline: none;
+    cursor: pointer;
+  }
+  .ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 9px; height: 9px;
+    background: #4488dd;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 4px rgba(68, 136, 220, 0.45);
+  }
+  .ctrl-slider::-moz-range-thumb {
+    width: 9px; height: 9px;
+    background: #4488dd;
+    border-radius: 50%;
+    border: none;
+    cursor: pointer;
+  }
+  .ctrl-val {
+    color: rgba(140, 185, 255, 0.52);
+    font-size: 9px;
+    font-family: 'Consolas', 'Cascadia Code', monospace;
+    width: 36px;
+    text-align: right;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid rgba(100, 180, 255, 0.12);
+    outline: none;
+    cursor: text;
+    padding: 0;
+  }
+  .ctrl-val:focus {
+    border-bottom-color: rgba(100, 180, 255, 0.45);
+    color: rgba(160, 210, 255, 0.85);
+  }
+
+  /* Toggle switch used for boolean controls */
+  .ctrl-toggle {
+    position: relative;
+    display: inline-block;
+    width: 30px;
+    height: 14px;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .ctrl-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .ctrl-toggle-track {
+    position: absolute;
+    inset: 0;
+    background: rgba(60, 80, 120, 0.4);
+    border: 1px solid rgba(100, 160, 220, 0.2);
+    border-radius: 7px;
+    transition: background 0.18s, border-color 0.18s;
+  }
+  .ctrl-toggle-track::before {
+    content: '';
+    position: absolute;
+    width: 10px; height: 10px;
+    top: 1px; left: 1px;
+    background: rgba(140, 170, 215, 0.55);
+    border-radius: 50%;
+    transition: transform 0.18s, background 0.18s;
+  }
+  .ctrl-toggle input:checked ~ .ctrl-toggle-track {
+    background: rgba(68, 136, 220, 0.55);
+    border-color: rgba(68, 136, 220, 0.5);
+  }
+  .ctrl-toggle input:checked ~ .ctrl-toggle-track::before {
+    transform: translateX(16px);
+    background: #5599ee;
+  }
+  .ctrl-color {
+    width: 38px; height: 20px;
+    border: 1px solid rgba(100,180,255,0.22);
+    border-radius: 4px;
+    background: none;
+    cursor: pointer;
+    padding: 1px;
+    flex-shrink: 0;
+  }
+  .ctrl-color-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    margin-top: 4px;
+  }
+  .ctrl-color-cell {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .ctrl-color-cell-lbl {
+    color: rgba(160, 190, 230, 0.62);
+    font-size: 9px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 54px;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+
+<div id="ui-bar">
+  <select id="file-select"><option value="">— select audio file —</option></select>
+  <button id="play-btn">Play</button>
+  <button id="live-btn">🎤 Live</button>
+  <span id="status">Idle</span>
+</div>
+
+<div id="playback-bar">
+  <span class="pb-time" id="time-current">0:00</span>
+  <div id="scrub-track">
+    <div id="scrub-rail"></div>
+    <div id="scrub-fill"></div>
+    <div id="scrub-thumb"></div>
+  </div>
+  <span class="pb-time" id="time-total">0:00</span>
+</div>
+
+<div id="bottom-panel">
+  <div id="panel-resize"></div>
+  <div id="panel-header">
+    <div id="panel-toggle"><span id="panel-arrow">▲</span></div>
+    <div id="panel-tabs">
+      <button class="panel-tab active" data-tab="controls">Controls</button>
+      <button class="panel-tab" data-tab="analysis">Analysis</button>
+    </div>
+  </div>
+  <div id="panel-content">
+
+    <!-- Tab 1: Controls -->
+    <div id="tab-controls" class="tab-pane active">
+      <div id="creatures-panel">
+        <div class="creature-section">
+          <div id="jelli-list"><span id="jelli-list-label">Jellyfish</span></div>
+          <button id="add-jelli-btn" class="creature-spawn-btn">+ Jellyfish</button>
+        </div>
+        <div class="creature-section">
+          <div id="clam-list"><span id="clam-list-label">Clams</span></div>
+          <button id="add-clam-btn" class="creature-spawn-btn">🐚 Clam</button>
+        </div>
+      </div>
+      <div id="sliders-section">
+        <div id="sliders-header-label">Controls</div>
+        <div id="sliders-scroll"></div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Analysis -->
+    <div id="tab-analysis" class="tab-pane">
+      <div id="eq-section">
+        <div id="eq-label">Frequency Spectrum</div>
+        <canvas id="eq-canvas"></canvas>
+      </div>
+      <div id="log-section">
+        <div id="log-header">
+          <span>Beat Trigger Log</span>
+          <button id="clear-log-btn">Clear</button>
+        </div>
+        <div id="beat-log"></div>
+      </div>
+      <div id="graphs-section">
+        <div id="graphs-label">Detector Levels</div>
+        <div id="graphs-container"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script type="module">
+import { BeatDetector, BeatDetectorManager } from './BeatDetector.js';
+
+// ─── Constants (mutable — driven by sliders) ─────────────────────────────────
+// Blob physics
+let BLOB_PARTICLE_COUNT  = 10;      // tentacle segments per jellyfish (slider-controlled)
+let BLOB_REST_RADIUS     = 44;     // px — tentacle root spread radius (physics)
+let BELL_RADIUS          = 65;     // px — visual bell dome radius (independent of tentacle spread)
+let BLOB_SPRING_K        = 0.055;  // spring stiffness (toward rest position)
+let BLOB_DAMPING         = 0.87;   // per-frame velocity damping
+let BLOB_JITTER          = 0.09;   // Brownian jitter magnitude (px/frame added to vel)
+let BLOB_EDGE_DIST       = 20;     // px — max distance for drawing intra-blob edges
+let NODE_BASE_RADIUS     = 0.2;    // px — particle base draw radius
+
+// Blob expand-on-beat
+let BLOB_EXPAND_SCALE    = 0.20;   // fractional outward scale on trigger (0.72 → 72% stretch)
+let BLOB_EXPAND_DECAY    = 0.89;   // expand scalar decay per frame
+let TENTACLE_SPREAD_BOOST = 1.40;  // peak root-spread multiplier on trigger (1.0 = no spread)
+let TENTACLE_SPREAD_DECAY = 0.965; // per-frame decay back to 1.0 (slower = longer trailing wave)
+
+// Blob center drift
+let BLOB_DRIFT_MAX       = 0.55;   // px/frame — max slow-drift speed
+let BLOB_DRIFT_ACCEL     = 0.007;  // px/frame² — random drift acceleration
+let BLOB_BEAT_KICK       = 1.2;    // px/frame — center velocity on beat
+let BLOB_BEAT_KICK_DECAY = 0.98;   // kick velocity decay per frame
+let BLOB_MARGIN          = 120;    // px — soft repulsion from canvas edge
+let TOP_CLEAR            = 85;     // px — clear area below UI bars
+const ROTATION_SMOOTH    = 0.02;   // fraction of remaining angle closed per frame (EMA)
+const DRAG_SPRING_K      = 0.005;  // spring constant: cursor-to-blob pull per px of separation
+let   DRAG_MOMENTUM      = 2.4;    // fraction of mouse velocity transferred to creature on release
+
+
+// Energy-based propulsion — jellyfish recharge over time and spend on trigger
+let ENERGY_MAX      = 2.1;    // peak energy = peak kick magnitude (px/frame)
+let ENERGY_RECHARGE = 0.03;  // energy gained per frame (full charge in ~ENERGY_MAX/ENERGY_RECHARGE frames)
+let KICK_ACCEL      = 0.35;   // fraction of stored thrust/expand applied per frame (1.0 = instant)
+
+// Adaptive threshold decay parameters (written to detectors on slider change)
+let IDLE_DECAY_RATE  = 2.0;   // multiplier on idle decay speed (1 = original, 2 = 2× faster when idle)
+let FREQ_DECAY_BIAS  = 0.5;   // low-freq bias: 0 = flat, higher = bass detectors decay faster
+let MIN_FLUX_FLOOR   = 0.0000; // absolute minimum spectral flux to trigger — suppresses silence/noise triggers
+
+// Jellyfish structure (not all exposed via sliders)
+const BELL_RIM_COUNT     = 10;    // particles along the dome arc
+let   TENTACLE_COUNT     = 7;     // tentacles per jellyfish
+let   TENTACLE_SEG_LEN   = 18;    // px — rest distance between consecutive tentacle particles
+const JELLYFISH_GRAVITY  = 0.055; // px/frame² constant downward pull on tentacle particles
+
+// Effects
+let SHOCKWAVE_SPEED      = 3.5;
+let SHOCKWAVE_MAX_R      = 220;
+let POLYGON_MAX_SCALE    = 280;
+let POLYGON_EXPAND_RATE  = 5.5;
+let BG_R           = 96;
+let BG_G           = 123;
+let BG_B           = 123;
+let BG_TRAIL_ALPHA = 0.08;
+
+// Inflate/deflate system — jellyfish grow on beat, drift back to rest over time
+let INFLATE_ENABLED = true;
+let INFLATE_BOOST   = 0.08;   // scale added per trigger
+let INFLATE_DECAY   = 0.990;  // per-frame multiplier back toward 1.0 (0.99 ≈ 5s half-life)
+let INFLATE_MAX     = 1.50;   // maximum inflate scale
+
+// 150 Hz background wash (subD) — all slider-controlled
+let SUB_BAND_HEIGHT = 0.38;  // fraction of canvas height the gradient covers
+let SUB_MAX_ALPHA   = 0.04;  // peak opacity at the very bottom on trigger
+let SUB_R           = 162;   // colour components of the wash
+let SUB_G           = 178;
+let SUB_B           = 193;
+
+// Perceived-energy background glow
+let BG_ENERGY_MAX_ALPHA = 0.02;  // max white overlay opacity at peak energy (slider-controlled)
+let bgEnergySmooth      = 0;     // smoothed RMS energy (fast-attack / slow-release EMA)
+let bgTimeDomainData    = null;  // Uint8Array reused each frame for time-domain samples
+
+// ─── Underwater background effects ────────────────────────────────────────────
+let UW_CAUSTICS_ENABLED  = true;
+let UW_CAUSTICS_ALPHA    = 0.022;   // peak opacity of each caustic blob
+let UW_CAUSTICS_SPEED    = 0.00018; // Lissajous angular speed (radians per ms)
+let UW_PARTICLES_ENABLED = true;
+let UW_PARTICLES_ALPHA   = 0.40;    // base opacity multiplier for floating particles
+let UW_PARTICLES_SPEED   = 0.84;    // current drift speed in px/frame at 60 fps
+
+// Underwater blob palette — two color endpoints, interpolated per blob via colorT
+let UW_BLOB_R1 = 255,  UW_BLOB_G1 = 158, UW_BLOB_B1 = 215;
+let UW_BLOB_R2 = 253, UW_BLOB_G2 = 109,  UW_BLOB_B2 = 109;
+
+// Underwater particle color
+let UW_PARTICLES_R = 0, UW_PARTICLES_G = 0, UW_PARTICLES_B = 0;
+
+// ─── Retro dither filter ──────────────────────────────────────────────────────
+let DITHER_ENABLED      = false;
+let DITHER_PIXEL_SIZE   = 2;     // downscale divisor — larger = coarser/more pixelated
+let DITHER_LEVELS       = 12;    // palette steps per channel (2=1-bit, 12=subtle, 32≈smooth)
+let DITHER_OPACITY      = 0.85;  // overlay opacity — lets original colors bleed through
+let DITHER_TINT_ENABLED = false; // phosphor/CCTV color tint
+let DITHER_TINT_R       = 20;    // tint color (default: faint ocean blue)
+let DITHER_TINT_G       = 60;
+let DITHER_TINT_B       = 80;
+let DITHER_TINT_STR     = 0.06;  // 0=no tint, 1=fully tinted
+let DITHER_SCAN_ENABLED = true;  // horizontal scanlines
+let DITHER_SCAN_ALPHA   = 0.08;  // scanline darkness
+let DITHER_SCAN_GAP     = 3;     // px between scanlines
+let _ditherCanvas       = null;  // offscreen working canvas
+let _ditherCtx          = null;
+let _ditherLUT          = null;  // precomputed quantization table; null = needs rebuild
+
+// ─── Particle current speed modulation ────────────────────────────────────────
+let PARTICLE_TRIGGER_ENABLED  = false;
+let PARTICLE_TRIGGER_HZ       = 60;
+let PARTICLE_TRIGGER_BOOST    = 1.5;   // extra speed (px/frame) added at peak
+let PARTICLE_TRIGGER_SLOPE    = 0.5;   // power curve — <1 = punchy, >1 = gradual
+let PARTICLE_TRIGGER_FADE_IN  = 80;    // ms to reach peak
+let PARTICLE_TRIGGER_FADE_OUT = 400;   // ms to decay back
+let PARTICLE_ENERGY_ENABLED   = false;
+let PARTICLE_ENERGY_MIN       = 0.0;   // extra speed added at silence
+let PARTICLE_ENERGY_MAX       = 1.0;   // extra speed added at peak RMS energy
+
+// ─── Background blob flash effect ─────────────────────────────────────────────
+let BLOB_FLASH_ENABLED  = true;
+let BLOB_FLASH_HZ       = 60;
+let BLOB_FLASH_R        = 255;
+let BLOB_FLASH_G        = 255;
+let BLOB_FLASH_B        = 255;
+let BLOB_FLASH_RANDOM   = false;  // override color with a random color each trigger
+let BLOB_FLASH_SLOPE    = 0.4;    // power curve — <1 = punchy (fast rise, slow tail)
+let BLOB_FLASH_FADE_IN  = 150;     // ms to reach peak brightness
+let BLOB_FLASH_FADE_OUT = 1080;    // ms to decay back to normal
+let BLOB_FLASH_ALL      = true;  // all caustic blobs vs one random blob
+
+let _uwCaustics     = [];
+let _uwParticles    = [];
+let _uwT            = 0;      // seconds — accumulated time for Lissajous animation
+let _uwCurrentAngle = 1.2;    // current direction in radians — slowly rotates each frame
+
+// ─── Spotlight (solo mode) ────────────────────────────────────────────────────
+// Faint halo that appears behind a jellyfish that has been the sole active one
+// for at least SOLO_THRESHOLD_MS milliseconds.
+let SPOTLIGHT_ENABLED     = true;
+let SOLO_THRESHOLD_MS     = 4000;   // ms of solo activity before spotlight appears
+let SPOTLIGHT_MAX_ALPHA   = 0.18;   // peak opacity of the spotlight glow
+let SPOTLIGHT_RADIUS_MULT = 3.5;    // outer radius as a multiple of BELL_RADIUS
+let SPOTLIGHT_FADE_IN     = 0.04;   // EMA rate toward target alpha per frame (fade in)
+let SPOTLIGHT_FADE_OUT    = 0.02;   // EMA rate away from target alpha per frame (fade out)
+// Internal — activity window defines how long a jelli counts as "still playing"
+// after its last trigger. ~2.5 s window at 60 fps with these values.
+const SOLO_ACTIVITY_DECAY  = 0.985;
+const SOLO_ACTIVITY_THRESH = 0.10;
+
+// ─── Duo Link ─────────────────────────────────────────────────────────────────
+// A drifting particle web that connects exactly two active jellyfish, styled
+// like the bell interior web but spanning the space between them.
+let DUO_LINK_ENABLED        = false;
+let DUO_THRESHOLD_MS        = 4000;   // ms of confirmed sync before link appears
+let DUO_LINK_MAX_ALPHA      = 0.14;   // peak edge alpha
+// Sync detection — a pair forms when their triggers are temporally close.
+// For each pair, we count how many of A's recent triggers land within
+// ±DUO_SYNC_TOLERANCE ms of any of B's triggers (and vice-versa).
+// Both counts must reach DUO_SYNC_MIN_MATCHES inside the rolling window.
+let DUO_SYNC_WINDOW         = 5.0;    // seconds — how far back to look
+let DUO_SYNC_TOLERANCE      = 200;    // ms — how close two triggers must be to count as "in sync"
+let DUO_SYNC_MIN_MATCHES    = 3;      // how many mutually-timed beats required to qualify
+let DUO_LINK_EDGE_DIST      = 110;    // connection radius (px) between link particles
+let DUO_LINK_PARTICLE_COUNT = 32;     // total drifting particles for the link field
+let DUO_LINK_SPREAD         = 1.2;    // max perpendicular spread as a multiple of BELL_RADIUS
+let DUO_FADE_IN             = 0.03;   // EMA rate toward target alpha per frame
+let DUO_FADE_OUT            = 0.015;  // EMA rate away (slower — lingering fade)
+let _duoPair = null;   // single active pair; extensible to an array in future
+
+// ─── Clam ─────────────────────────────────────────────────────────────────────
+// Two-shelled creature. Snaps open on beat, floats upward, falls back under water gravity.
+let CLAM_SHELL_W    = 104;    // px — shell half-width
+let CLAM_SHELL_H    = 56;    // px — upper dome height
+let CLAM_SHELL_BLOW = 56;    // px — lower shell depth (shallower than top)
+let CLAM_LIP_OPEN   = 100;    // px — max lip gap on full snap open
+let CLAM_SNAP_FORCE = 0.5;   // px/frame — upward impulse on trigger
+let CLAM_SNAP_SPREAD = 2.0;  // px/frame — max random lateral on trigger
+let CLAM_SPIN_MAX   = 0.000; // rad/frame — max spin impulse on trigger
+let CLAM_GRAVITY    = 0.145; // px/frame² — downward pull (water drag)
+let CLAM_WATER_DRAG = 0.984; // per-frame velocity damping
+let CLAM_SPIN_DECAY = 0.974; // per-frame spin velocity decay
+let CLAM_SNAP_SPRING = 0.20; // spring stiffness for shell closing
+let CLAM_SNAP_DAMP   = 0.70; // damping on shell open velocity
+let CLAM_EDGE_DIST  = 20;    // px — particle web connection radius
+let CLAM_MARGIN     = 100;   // px — edge repulsion margin
+const CLAM_RIM_UPPER = 8;    // particles along upper arc
+const CLAM_RIM_LOWER = 5;    // particles along lower arc
+const CLAM_INT_UPPER = 9;    // interior particles in upper half
+const CLAM_INT_LOWER = 4;    // interior particles in lower half
+
+let clams = [];
+
+const PROVIDED_FILES = [
+    "AudioFiles/58hzKick_375hzSnare_loop_110bpm.wav",
+    "AudioFiles/58hz_kick_loop_110bpm.wav",
+    "AudioFiles/58hz_kick_loop_40bpm.wav",
+    "AudioFiles/goldre.wav",
+    "AudioFiles/harwav.wav",
+    "AudioFiles/helo_exp4.wav",
+    "AudioFiles/mgmt-kids.wav",
+    "AudioFiles/nujabes-luv(sic)pt2.wav",
+    "AudioFiles/nuview.wav",
+    "AudioFiles/traff.wav",
+    "AudioFiles/wtr.wav",
+];
+
+// ─── DOM ─────────────────────────────────────────────────────────────────────
+const canvas      = document.getElementById('canvas');
+const ctx         = canvas.getContext('2d');
+const fileSelect  = document.getElementById('file-select');
+const playBtn     = document.getElementById('play-btn');
+const liveModeBtn = document.getElementById('live-btn');
+const addJelliBtn = document.getElementById('add-jelli-btn');
+const statusEl    = document.getElementById('status');
+
+const bottomPanel  = document.getElementById('bottom-panel');
+const panelToggle  = document.getElementById('panel-toggle');
+const eqCanvas     = document.getElementById('eq-canvas');
+const eqCtx        = eqCanvas.getContext('2d');
+const beatLog      = document.getElementById('beat-log');
+const clearLogBtn  = document.getElementById('clear-log-btn');
+const scrubTrack   = document.getElementById('scrub-track');
+const scrubFill    = document.getElementById('scrub-fill');
+const scrubThumb   = document.getElementById('scrub-thumb');
+const timeCurrent  = document.getElementById('time-current');
+const timeTotal    = document.getElementById('time-total');
+
+// ─── State ────────────────────────────────────────────────────────────────────
+// blobs[0]=bass(cyan)  blobs[1]=mid(purple)  blobs[2]=high(gold)
+let blobs = [];
+
+let sparks         = [];
+let shockwaves     = [];
+let polygonFlashes = [];
+
+let audio   = null;
+let manager = null;
+let subD           = null;   // 150 Hz — background gradient effect
+let _flashDetector      = null;   // configurable Hz — background blob flash effect
+let _particleTrigDetector = null; // configurable Hz — particle current speed trigger
+let _particleTrigT        = 0;    // 0→1→0 over the trigger cycle
+let _particleTrigPhase    = 'idle'; // 'idle' | 'in' | 'out'
+let _particleTrigElapsed  = 0;    // ms elapsed in current phase
+let playing = false;
+let frameCount = 0;
+
+let liveMode     = false;
+let liveStream   = null;   // MediaStream from getDisplayMedia
+let liveContext  = null;   // AudioContext for live audio
+let liveAnalyser = null;   // AnalyserNode for live audio
+let liveFreqData = null;   // Float32Array for live frequency data
+
+let panelOpen  = false;
+let draggedBlob = null;    // blob currently held by the user, or null
+let draggedClam = null;    // clam currently held by the user, or null
+let dragCursorX = 0;       // canvas-space cursor position during drag
+let dragCursorY = 0;
+let _dragVelX   = 0;       // smoothed mouse velocity for momentum-on-release
+let _dragVelY   = 0;
+let eqByteData = null;
+let isScrubbing = false;
+
+let lastSubLogTime  = 0;
+let _lastPlaybarMs  = 0;
+let _lastRenderMs   = 0;
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+function hexToRgba(hex, alpha) {
+    const [r, g, b] = _hexRgb(hex);
+    return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function rand(min, max)    { return min + Math.random() * (max - min); }
+function randInt(min, max) { return Math.floor(rand(min, max + 1)); }
+function lerp(a, b, t)     { return a + (b - a) * t; }
+
+function formatTime(s) {
+    if (!isFinite(s) || s < 0) return '0:00';
+    const m = Math.floor(s / 60);
+    return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+}
+
+// ─── Canvas init ──────────────────────────────────────────────────────────────
+function resizeCanvas() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+    frameCount = 0;
+    _ditherCanvas = null;
+    _ditherLUT    = null;
+    initUnderwater();
+}
+
+// ─── Blob init ────────────────────────────────────────────────────────────────
+const DEFAULT_BLOBS = [
+    { name: 'high', detectorHz: 12000, detectorRangeHz: 500, detectorOctaves: 2, detectorDuration: 6,  color: '#b4e9e9', effect: 'sparks',    effectColor: '#fff480', effectSpeed: 1.8, kickScale: 0.7 },
+    // { name: 'mid',  detectorHz: 3000,  detectorRangeHz: 200, detectorOctaves: 2, detectorDuration: 8,  color: '#b150f2', effect: 'polygon',   effectColor: '#1e1e2a', effectSpeed: 1.1, kickScale: 0.7 },
+    { name: 'bass', detectorHz: 60,    detectorRangeHz: 15,  detectorOctaves: 1, detectorDuration: 8,  color: '#ffffff', effect: 'shockwave', effectColor: '#6b8585', effectSpeed: 0.7, kickScale: 0.8 },
+    // { name: 'dark', detectorHz: 60,    detectorRangeHz: 15,  detectorOctaves: 1, detectorDuration: 8,  color: '#000000', effect: 'none',      effectColor: '#d4d4d4', effectSpeed: 0.7, kickScale: 0.8 },
+];
+
+function _createBlobGeometry(cfg) {
+    const w = canvas.width;
+    const h = canvas.height;
+    const cx = cfg.cx ?? w * (0.2 + Math.random() * 0.6);
+    const cy = cfg.cy ?? h * 0.42 + rand(-h * 0.08, h * 0.08);
+    const bellRad = BELL_RADIUS;        // dome visual size
+    const rootRad = BLOB_REST_RADIUS;   // tentacle attachment spread
+    const rimParticles = [];
+
+    for (let i = 0; i < BELL_RIM_COUNT; i++) {
+        const θ  = (i / (BELL_RIM_COUNT - 1)) * Math.PI;
+        const rx = Math.cos(θ) * bellRad;
+        const ry = -Math.sin(θ) * bellRad;
+        rimParticles.push({ rx, ry, x: cx + rx, y: cy + ry, vx: 0, vy: 0, rim: true });
+    }
+    const BELL_INTERIOR = 18;
+    for (let i = 0; i < BELL_INTERIOR; i++) {
+        const θ  = rand(0.05, 0.95) * Math.PI;
+        const r  = rand(0.10, 0.88) * bellRad;
+        const rx = Math.cos(θ) * r;
+        const ry = -Math.sin(θ) * r;
+        rimParticles.push({ rx, ry, x: cx + rx, y: cy + ry, vx: rand(-0.3, 0.3), vy: rand(-0.3, 0.3), rim: false });
+    }
+
+    const segCount = Math.max(3, Math.round(BLOB_PARTICLE_COUNT));
+    const tentacles = [];
+    for (let t = 0; t < TENTACLE_COUNT; t++) {
+        const rootOffX = lerp(-rootRad * 0.88, rootRad * 0.88, t / (TENTACLE_COUNT - 1));
+        const chain = [];
+        for (let s = 0; s < segCount; s++) {
+            const tx = cx + rootOffX + rand(-2, 2);
+            const ty = cy + s * TENTACLE_SEG_LEN;
+            chain.push({ x: tx, y: ty, px: tx, py: ty });
+        }
+        tentacles.push(chain);
+    }
+
+    const _blobColor       = cfg.color       ?? '#00c8ff';
+    const _blobEffectColor = cfg.effectColor ?? cfg.color ?? '#00c8ff';
+    const [colorR, colorG, colorB]   = _hexRgb(_blobColor);
+    const [effectR, effectG, effectB] = _hexRgb(_blobEffectColor);
+    return {
+        cx, cy,
+        cvx: rand(-0.2, 0.2), cvy: rand(-0.15, 0.15),
+        bkx: 0, bky: 0,
+        color:          _blobColor,
+        colorR, colorG, colorB,
+        effect:         cfg.effect      ?? 'none',
+        effectColor:    _blobEffectColor,
+        effectR, effectG, effectB,
+        effectSpeed:    cfg.effectSpeed ?? 1.0,
+        kickScale:      cfg.kickScale   ?? 1.0,
+        name:           cfg.name        ?? 'Jelli',
+        detectorHz:     cfg.detectorHz      ?? 100,
+        detectorRangeHz:cfg.detectorRangeHz ?? 20,
+        detectorOctaves:cfg.detectorOctaves ?? 1,
+        detectorDuration:cfg.detectorDuration ?? 8,
+        detector:       null,
+        _lastLogTime:   0,
+        expandScale:         0,
+        inflateScale:        1.0,
+        tentacleSpreadScale: 1.0,  // root-spread multiplier; >1 fans tentacles outward on trigger
+        energy:              ENERGY_MAX,
+        thrustRemaining:     0,
+        expandRemaining:     0,
+        idlePhase:      rand(0, Math.PI * 2),
+        angle:          0,
+        targetAngle:    0,
+        rimParticles,
+        rimOnly:        rimParticles.filter(p => p.rim),
+        tentacles,
+        // Spotlight state
+        activitySmooth: 0,   // decaying beat-activity signal (1.0 on trigger → 0 over ~2.5 s)
+        soloMs:         0,   // accumulated ms as the sole active blob
+        spotlightAlpha: 0,   // current rendered spotlight opacity
+        triggerTimes:   [],  // timestamps of recent beat triggers (used for duo sync detection)
+    };
+}
+
+// ─── Clam geometry init ───────────────────────────────────────────────────────
+function _createClamGeometry(cfg) {
+    const w  = canvas.width;
+    const h  = canvas.height;
+    const cx = cfg.cx ?? w * (0.2 + Math.random() * 0.6);
+    const cy = cfg.cy ?? h * 0.58 + rand(-h * 0.06, h * 0.06);
+
+    const particles = [];
+
+    // Upper shell rim — semicircle arc from right lip (shellW, 0) through crown (0, -shellH)
+    // to left lip (-shellW, 0). Same angular convention as jellyfish bell.
+    for (let i = 0; i < CLAM_RIM_UPPER; i++) {
+        const θ  = (i / (CLAM_RIM_UPPER - 1)) * Math.PI;
+        const rx =  Math.cos(θ) * CLAM_SHELL_W;
+        const ry = -Math.sin(θ) * CLAM_SHELL_H;
+        particles.push({ rx, ry, x: cx + rx, y: cy + ry, vx: 0, vy: 0, rim: true, halfBit: 1 });
+    }
+    // Upper interior
+    for (let i = 0; i < CLAM_INT_UPPER; i++) {
+        const θ  = rand(0.05, 0.95) * Math.PI;
+        const r  = rand(0.15, 0.85);
+        const rx =  Math.cos(θ) * CLAM_SHELL_W * r;
+        const ry = -Math.sin(θ) * CLAM_SHELL_H * r;
+        particles.push({ rx, ry, x: cx + rx, y: cy + ry, vx: rand(-0.3, 0.3), vy: rand(-0.3, 0.3), rim: false, halfBit: 1 });
+    }
+    // Lower shell rim — shallow arc downward
+    for (let i = 0; i < CLAM_RIM_LOWER; i++) {
+        const θ  = (i / (CLAM_RIM_LOWER - 1)) * Math.PI;
+        const rx =  Math.cos(θ) * CLAM_SHELL_W;
+        const ry =  Math.sin(θ) * CLAM_SHELL_BLOW;
+        particles.push({ rx, ry, x: cx + rx, y: cy + ry, vx: 0, vy: 0, rim: true, halfBit: 0 });
+    }
+    // Lower interior
+    for (let i = 0; i < CLAM_INT_LOWER; i++) {
+        const θ  = rand(0.05, 0.95) * Math.PI;
+        const r  = rand(0.2, 0.8);
+        const rx =  Math.cos(θ) * CLAM_SHELL_W * r;
+        const ry =  Math.sin(θ) * CLAM_SHELL_BLOW * r;
+        particles.push({ rx, ry, x: cx + rx, y: cy + ry, vx: rand(-0.3, 0.3), vy: rand(-0.3, 0.3), rim: false, halfBit: 0 });
+    }
+
+    const upperRim = particles.filter(p => p.rim && p.halfBit === 1);
+    const lowerRim = particles.filter(p => p.rim && p.halfBit === 0);
+
+    const _clamColor       = cfg.color       ?? '#d4924a';
+    const _clamEffectColor = cfg.effectColor ?? cfg.color ?? '#d4924a';
+    const [colorR, colorG, colorB]    = _hexRgb(_clamColor);
+    const [effectR, effectG, effectB] = _hexRgb(_clamEffectColor);
+
+    return {
+        cx, cy,
+        cvx: 0, cvy: 0,
+        angle: 0, spinVel: 0,
+        openAmount: 0, openVel: 0,
+        idlePhase: rand(0, Math.PI * 2),
+        color:       _clamColor,  colorR, colorG, colorB,
+        effectColor: _clamEffectColor, effectR, effectG, effectB,
+        effect:      cfg.effect      ?? 'none',
+        effectSpeed: cfg.effectSpeed ?? 1.0,
+        kickScale:   cfg.kickScale   ?? 1.0,
+        name:        cfg.name        ?? 'Clam',
+        detectorHz:       cfg.detectorHz       ?? 58,
+        detectorRangeHz:  cfg.detectorRangeHz  ?? 15,
+        detectorOctaves:  cfg.detectorOctaves  ?? 1,
+        detectorDuration: cfg.detectorDuration ?? 8,
+        detector:    null,
+        _lastLogTime: 0,
+        activitySmooth: 0,
+        soloMs:         0,
+        spotlightAlpha: 0,
+        triggerTimes:   [],
+        particles, upperRim, lowerRim,
+        type: 'clam',
+    };
+}
+
+function initBlobs() {
+    blobs = [];
+    const w = canvas.width;
+    for (let bi = 0; bi < DEFAULT_BLOBS.length; bi++) {
+        const cfg = { ...DEFAULT_BLOBS[bi], cx: w * ((bi + 1) / (DEFAULT_BLOBS.length + 1)) };
+        blobs.push(_createBlobGeometry(cfg));
+    }
+}
+
+// Reinit blob geometry (e.g. after particle count change) preserving all config.
+function reinitBlobs() {
+    const saved = blobs.map(b => ({
+        cx: b.cx, cy: b.cy,
+        color: b.color, effect: b.effect, effectColor: b.effectColor,
+        effectSpeed: b.effectSpeed, kickScale: b.kickScale,
+        name: b.name, detector: b.detector, _lastLogTime: b._lastLogTime,
+        detectorHz: b.detectorHz, detectorRangeHz: b.detectorRangeHz,
+        detectorOctaves: b.detectorOctaves, detectorDuration: b.detectorDuration,
+    }));
+    blobs = [];
+    for (const cfg of saved) {
+        const blob = _createBlobGeometry(cfg);
+        blob.detector = cfg.detector;
+        blob._lastLogTime = cfg._lastLogTime;
+        blobs.push(blob);
+    }
+    buildJelliList();
+    buildFreqSliders();
+}
+
+// Reinit clam geometry (e.g. after shell dimension change) preserving physics state and config.
+function reinitClams() {
+    const saved = clams.map(c => ({
+        cx: c.cx, cy: c.cy,
+        angle: c.angle, spinVel: c.spinVel,
+        cvx: c.cvx, cvy: c.cvy,
+        color: c.color, effectColor: c.effectColor,
+        effect: c.effect, effectSpeed: c.effectSpeed, kickScale: c.kickScale,
+        name: c.name, detector: c.detector, _lastLogTime: c._lastLogTime,
+        detectorHz: c.detectorHz, detectorRangeHz: c.detectorRangeHz,
+        detectorOctaves: c.detectorOctaves, detectorDuration: c.detectorDuration,
+    }));
+    clams = [];
+    for (const cfg of saved) {
+        const clam = _createClamGeometry(cfg);
+        clam.detector     = cfg.detector;
+        clam._lastLogTime = cfg._lastLogTime;
+        // Restore continuous physics state so movement feels uninterrupted
+        clam.angle   = cfg.angle;
+        clam.spinVel = cfg.spinVel;
+        clam.cvx     = cfg.cvx;
+        clam.cvy     = cfg.cvy;
+        clams.push(clam);
+    }
+    buildClamList();
+    buildFreqSliders();
+}
+
+function spawnJellyfish(cfg) {
+    const blob = _createBlobGeometry(cfg);
+    blobs.push(blob);
+    // Create detector immediately if audio is active
+    if (manager?.analyser || liveMode) {
+        blob.detector = new BeatDetector({
+            targetHz:        blob.detectorHz,
+            rangeHz:         blob.detectorRangeHz,
+            octaves:         blob.detectorOctaves,
+            triggerDuration: blob.detectorDuration,
+            name:            blob.name,
+        });
+    }
+    buildJelliList();
+}
+
+function removeBlob(bi) {
+    if (bi < 0 || bi >= blobs.length) return;
+    blobs.splice(bi, 1);
+    buildJelliList();
+    buildFreqSliders();
+}
+
+function buildJelliList() {
+    const list = document.getElementById('jelli-list');
+    if (!list) return;
+    // Clear all chips (keep the label div)
+    const label = list.querySelector('#jelli-list-label');
+    list.innerHTML = '';
+    if (label) list.appendChild(label);
+
+    for (let bi = 0; bi < blobs.length; bi++) {
+        const blob = blobs[bi];
+        const chip = document.createElement('div');
+        chip.className = 'jelli-chip';
+
+        const dot = document.createElement('span');
+        dot.className = 'jelli-dot';
+        dot.style.background = blob.color;
+        chip.appendChild(dot);
+
+        const nameSp = document.createElement('span');
+        nameSp.textContent = blob.name;
+        chip.appendChild(nameSp);
+
+        const rmBtn = document.createElement('button');
+        rmBtn.className   = 'jelli-remove';
+        rmBtn.textContent = '×';
+        rmBtn.title       = 'Remove jellyfish';
+        rmBtn.addEventListener('click', () => removeBlob(blobs.indexOf(blob)));
+        chip.appendChild(rmBtn);
+
+        list.appendChild(chip);
+    }
+}
+
+function spawnClam(cfg) {
+    const clam = _createClamGeometry(cfg);
+    clams.push(clam);
+    if (manager?.analyser || liveMode) {
+        clam.detector = new BeatDetector({
+            targetHz:        clam.detectorHz,
+            rangeHz:         clam.detectorRangeHz,
+            octaves:         clam.detectorOctaves,
+            triggerDuration: clam.detectorDuration,
+            name:            clam.name,
+        });
+    }
+    buildClamList();
+    buildFreqSliders();
+}
+
+function removeClam(ci) {
+    if (ci < 0 || ci >= clams.length) return;
+    clams.splice(ci, 1);
+    buildClamList();
+    buildFreqSliders();
+}
+
+function buildClamList() {
+    const list = document.getElementById('clam-list');
+    if (!list) return;
+    const label = list.querySelector('#clam-list-label');
+    list.innerHTML = '';
+    if (label) list.appendChild(label);
+
+    for (let ci = 0; ci < clams.length; ci++) {
+        const clam = clams[ci];
+        const chip = document.createElement('div');
+        chip.className = 'clam-chip';
+
+        const dot = document.createElement('span');
+        dot.className = 'clam-dot';
+        dot.style.background = clam.color;
+        chip.appendChild(dot);
+
+        const nameSp = document.createElement('span');
+        nameSp.textContent = clam.name;
+        chip.appendChild(nameSp);
+
+        const rmBtn = document.createElement('button');
+        rmBtn.className   = 'clam-remove';
+        rmBtn.textContent = '×';
+        rmBtn.title       = 'Remove clam';
+        rmBtn.addEventListener('click', () => removeClam(clams.indexOf(clam)));
+        chip.appendChild(rmBtn);
+
+        list.appendChild(chip);
+    }
+}
+
+// ─── Jellyfish physics ────────────────────────────────────────────────────────
+function updateBlobs() {
+    for (const blob of blobs) {
+        const param = blob.detector ? blob.detector.parameter : 0;
+
+        // ── Center drift ──────────────────────────────────────────────────────
+        const isDragged = (blob === draggedBlob);
+
+        // Skip random jitter for dragged blob — it feeds into the velocity used for
+        // rotation targeting and causes erratic spinning while the blob is held.
+        if (!isDragged) {
+            blob.cvx += rand(-BLOB_DRIFT_ACCEL, BLOB_DRIFT_ACCEL);
+            blob.cvy += rand(-BLOB_DRIFT_ACCEL, BLOB_DRIFT_ACCEL);
+        }
+
+        if (isDragged) {
+            // Elastic-rope pull: acceleration proportional to distance from cursor
+            blob.cvx += (dragCursorX - blob.cx) * DRAG_SPRING_K;
+            blob.cvy += (dragCursorY - blob.cy) * DRAG_SPRING_K;
+        } else {
+            // Soft edge repulsion (skipped while dragging so the blob moves freely)
+            if (blob.cx < BLOB_MARGIN)                 blob.cvx += 0.045;
+            if (blob.cx > canvas.width  - BLOB_MARGIN) blob.cvx -= 0.045;
+            if (blob.cy < TOP_CLEAR + BLOB_MARGIN)      blob.cvy += 0.045;
+            if (blob.cy > canvas.height - BLOB_MARGIN)  blob.cvy -= 0.045;
+        }
+
+        // Drift speed cap — raised while dragging so the blob can keep up with fast cursor movement
+        const dMax = isDragged ? 6 : BLOB_DRIFT_MAX;
+        const dspd = Math.sqrt(blob.cvx ** 2 + blob.cvy ** 2);
+        if (dspd > dMax) { blob.cvx *= dMax / dspd; blob.cvy *= dMax / dspd; }
+
+        // Kick-channel edge bounce (skipped while dragging)
+        if (!isDragged) {
+            if (blob.cx < BLOB_MARGIN)                 blob.bkx =  Math.abs(blob.bkx);
+            if (blob.cx > canvas.width  - BLOB_MARGIN) blob.bkx = -Math.abs(blob.bkx);
+            if (blob.cy < TOP_CLEAR + BLOB_MARGIN)      blob.bky =  Math.abs(blob.bky);
+            if (blob.cy > canvas.height - BLOB_MARGIN)  blob.bky = -Math.abs(blob.bky);
+        }
+
+        // ── Drain thrust: apply KICK_ACCEL fraction of pending thrust each frame ──
+        if (blob.thrustRemaining > 0.0005) {
+            const t = blob.thrustRemaining * KICK_ACCEL;
+            blob.bkx += Math.sin(blob.angle) * t;
+            blob.bky -= Math.cos(blob.angle) * t;
+            blob.thrustRemaining -= t;
+        } else {
+            blob.thrustRemaining = 0;
+        }
+
+        blob.bkx *= BLOB_BEAT_KICK_DECAY;
+        blob.bky *= BLOB_BEAT_KICK_DECAY;
+
+        blob.cx += blob.cvx + blob.bkx;
+        blob.cy += blob.cvy + blob.bky;
+        blob.cx = Math.max(BLOB_REST_RADIUS, Math.min(canvas.width  - BLOB_REST_RADIUS, blob.cx));
+        blob.cy = Math.max(TOP_CLEAR + BLOB_REST_RADIUS, Math.min(canvas.height - BLOB_REST_RADIUS, blob.cy));
+
+        // ── Orientation ───────────────────────────────────────────────────────
+        const totalVx = blob.cvx + blob.bkx;
+        const totalVy = blob.cvy + blob.bky;
+        const speed   = Math.sqrt(totalVx * totalVx + totalVy * totalVy);
+
+        if (isDragged) {
+            // While held, face toward the cursor directly — the cursor vector is
+            // stable and noise-free, preventing erratic spinning from jitter.
+            const cdx = dragCursorX - blob.cx;
+            const cdy = dragCursorY - blob.cy;
+            if (Math.hypot(cdx, cdy) > 8) {
+                blob.targetAngle = Math.atan2(cdx, -cdy);
+            }
+        } else {
+            // Normal: derive heading from total velocity when moving fast enough.
+            if (speed > 0.08) {
+                blob.targetAngle = Math.atan2(totalVx, -totalVy);
+            }
+        }
+
+        // Shortest-path EMA toward targetAngle.
+        // Turn rate scales with speed so near-motionless blobs barely rotate —
+        // prevents erratic spinning from tiny, noisy velocity fluctuations.
+        let dAngle = blob.targetAngle - blob.angle;
+        if (dAngle >  Math.PI) dAngle -= Math.PI * 2;
+        if (dAngle < -Math.PI) dAngle += Math.PI * 2;
+        const turnRate = isDragged ? ROTATION_SMOOTH : ROTATION_SMOOTH * Math.min(1, speed / 0.35);
+        blob.angle += dAngle * Math.max(0.003, turnRate);
+
+        // Gentle forward nudge while actively turning — jellyfish swims into turns.
+        if (!isDragged && Math.abs(dAngle) > 0.15 && speed > 0.08) {
+            const nudge = Math.abs(dAngle) * 0.004;
+            blob.cvx += Math.sin(blob.angle) * nudge;
+            blob.cvy -= Math.cos(blob.angle) * nudge;
+        }
+
+        // Cache trig — used by both rim and tentacle root calculations below
+        const cosA = Math.cos(blob.angle);
+        const sinA = Math.sin(blob.angle);
+
+        // ── Drain expand: apply KICK_ACCEL fraction of pending expansion each frame ─
+        if (blob.expandRemaining > 0.0005) {
+            const e = blob.expandRemaining * KICK_ACCEL;
+            blob.expandScale += e;
+            blob.expandRemaining -= e;
+        } else {
+            blob.expandRemaining = 0;
+        }
+
+        // ── Expand scale decay ────────────────────────────────────────────────
+        blob.expandScale *= BLOB_EXPAND_DECAY;
+        if (blob.expandScale < 0.001) blob.expandScale = 0;
+
+        // Tentacle spread decay — roots return inward; PBD carries the closing wave to the tips
+        blob.tentacleSpreadScale = 1 + (blob.tentacleSpreadScale - 1) * TENTACLE_SPREAD_DECAY;
+        if (blob.tentacleSpreadScale < 1.001) blob.tentacleSpreadScale = 1.0;
+
+        // ── Energy recharge ───────────────────────────────────────────────────
+        blob.energy = Math.min(blob.energy + ENERGY_RECHARGE, ENERGY_MAX);
+
+        // ── Inflate/deflate: persistent size that accumulates on beats ───────
+        // Always decay toward 1.0 (even when disabled, so toggling off deflates smoothly).
+        blob.inflateScale = 1 + (blob.inflateScale - 1) * INFLATE_DECAY;
+        if (blob.inflateScale < 1.0001) blob.inflateScale = 1.0;
+
+        // ── Idle pulsing: slow sinusoidal bell breath ─────────────────────────
+        blob.idlePhase += 0.022;
+        const idlePulse  = Math.sin(blob.idlePhase) * 0.045;
+        // inflateScale is always applied to bellScale — when disabled no new boosts are added,
+        // but the existing inflation deflates smoothly rather than snapping to 1.
+        const bellScale  = (1 + idlePulse + blob.expandScale * BLOB_EXPAND_SCALE) * blob.inflateScale;
+
+        // ── Bell rim particles ────────────────────────────────────────────────
+        // Each rim particle springs toward its rest position on the scaled dome arc.
+        const rimJitter = BLOB_JITTER * 0.35 * (1 + param * 0.5);
+        for (const p of blob.rimParticles) {
+            // Rotate the rest offset by blob.angle before adding to center
+            const srx    = p.rx * bellScale;
+            const sry    = p.ry * bellScale;
+            const restX  = blob.cx + srx * cosA - sry * sinA;
+            const restY  = blob.cy + srx * sinA + sry * cosA;
+            p.vx += (restX - p.x) * BLOB_SPRING_K;
+            p.vy += (restY - p.y) * BLOB_SPRING_K;
+            p.vx += rand(-rimJitter, rimJitter);
+            p.vy += rand(-rimJitter, rimJitter);
+            p.vx *= BLOB_DAMPING;
+            p.vy *= BLOB_DAMPING;
+            p.x  += p.vx;
+            p.y  += p.vy;
+        }
+
+        // ── Tentacle chain — Position-Based Dynamics ─────────────────────────
+        //
+        // Each particle carries implicit momentum via (pos - prevPos).
+        // Water drag is applied by scaling that delta before advancing.
+        // An inextensible distance constraint is then projected from root→tip,
+        // so movement propagates down the chain with natural, cascading lag
+        // rather than every segment rotating rigidly in lockstep.
+        //
+        // Trailing direction: gentle bias force so tentacles prefer to flow
+        // behind the jellyfish, but the constraint — not the force — shapes them.
+        const trailDX    = -sinA;   // opposite of head direction
+        const trailDY    =  cosA;
+        const tentJitter = BLOB_JITTER * 0.6 * (1 + param * 1.2);
+
+        for (let ti = 0; ti < blob.tentacles.length; ti++) {
+            const chain   = blob.tentacles[ti];
+            const tNorm   = ti / (blob.tentacles.length - 1);
+            const rootOff = lerp(-BLOB_REST_RADIUS * 0.88, BLOB_REST_RADIUS * 0.88, tNorm) * bellScale * blob.tentacleSpreadScale;
+            const rootX   = blob.cx + rootOff * cosA;
+            const rootY   = blob.cy + rootOff * sinA;
+
+            for (let si = 0; si < chain.length; si++) {
+                const p = chain[si];
+
+                if (si === 0) {
+                    // Root: snap to attachment point each frame.
+                    // Store current pos as previous so the root carries no phantom velocity.
+                    p.px = p.x;
+                    p.py = p.y;
+                    p.x  = rootX;
+                    p.y  = rootY;
+                    continue;
+                }
+
+                // Implicit velocity = displacement since last frame, attenuated by water drag
+                const ivx = (p.x - p.px) * BLOB_DAMPING;
+                const ivy = (p.y - p.py) * BLOB_DAMPING;
+
+                // Advance stored previous position before we move
+                p.px = p.x;
+                p.py = p.y;
+
+                // Apply velocity + small external forces (trailing bias + residual gravity)
+                p.x += ivx
+                     + rand(-tentJitter, tentJitter)
+                     + trailDX * JELLYFISH_GRAVITY * 0.12;
+                p.y += ivy
+                     + rand(-tentJitter, tentJitter)
+                     + trailDY * JELLYFISH_GRAVITY * 0.12
+                     + JELLYFISH_GRAVITY * 0.06;   // tiny real-gravity droop
+
+                // Distance constraint: project p onto the sphere of radius segLen
+                // around its parent. This keeps tentacle segments inextensible and
+                // propagates the root's movement down the chain with natural lag.
+                const par   = chain[si - 1];
+                const dx    = p.x - par.x;
+                const dy    = p.y - par.y;
+                const dist2 = dx * dx + dy * dy;
+                if (dist2 < 1e-6) continue;
+                const dist  = Math.sqrt(dist2);
+                const corr  = (dist - TENTACLE_SEG_LEN) / dist;
+                p.x -= dx * corr;
+                p.y -= dy * corr;
+            }
+        }
+    }
+}
+
+// ─── Clam physics ─────────────────────────────────────────────────────────────
+function updateClams() {
+    for (const clam of clams) {
+        const param = clam.detector ? clam.detector.parameter : 0;
+        const isDragged = (clam === draggedClam);
+
+        // Water gravity — pulls clam back down
+        clam.cvy += CLAM_GRAVITY;
+
+        // Slow idle bob — sinusoidal vertical drift like floating in water
+        clam.idlePhase += 0.016;
+        clam.cvy += Math.sin(clam.idlePhase) * 0.007;
+
+        // Water drag (velocity damping in both axes)
+        clam.cvx *= CLAM_WATER_DRAG;
+        clam.cvy *= CLAM_WATER_DRAG;
+
+        // Spin decay — if Spin Max is zero or below, stop all rotation and drift angle back to upright
+        if (CLAM_SPIN_MAX <= 0) {
+            clam.spinVel = 0;
+            clam.angle  *= 0.95;
+        } else {
+            clam.spinVel *= CLAM_SPIN_DECAY;
+            clam.angle   += clam.spinVel;
+        }
+
+        if (isDragged) {
+            // Spring pull toward cursor
+            clam.cvx += (dragCursorX - clam.cx) * DRAG_SPRING_K;
+            clam.cvy += (dragCursorY - clam.cy) * DRAG_SPRING_K;
+        } else {
+            // Soft edge repulsion
+            if (clam.cx < CLAM_MARGIN)                  clam.cvx += 0.04;
+            if (clam.cx > canvas.width  - CLAM_MARGIN)  clam.cvx -= 0.04;
+            if (clam.cy < TOP_CLEAR + CLAM_MARGIN)       clam.cvy += 0.04;
+            if (clam.cy > canvas.height - CLAM_MARGIN)   clam.cvy -= 0.04;
+        }
+
+        // Speed cap — raised while dragging so it can keep up with fast cursor movement
+        const spd = Math.sqrt(clam.cvx * clam.cvx + clam.cvy * clam.cvy);
+        const spdMax = isDragged ? 12 : 10;
+        if (spd > spdMax) { clam.cvx *= spdMax / spd; clam.cvy *= spdMax / spd; }
+
+        clam.cx += clam.cvx;
+        clam.cy += clam.cvy;
+        clam.cx  = Math.max(CLAM_MARGIN, Math.min(canvas.width  - CLAM_MARGIN, clam.cx));
+        clam.cy  = Math.max(TOP_CLEAR + CLAM_MARGIN, Math.min(canvas.height - CLAM_MARGIN, clam.cy));
+
+        // Shell opening spring — snaps open, then springs back closed
+        clam.openVel   += -CLAM_SNAP_SPRING * clam.openAmount;
+        clam.openVel   *= CLAM_SNAP_DAMP;
+        clam.openAmount = Math.max(0, clam.openAmount + clam.openVel);
+
+        const cosA = Math.cos(clam.angle);
+        const sinA = Math.sin(clam.angle);
+
+        // Particle spring physics — same spring-toward-rest as jellyfish
+        // Upper half (halfBit=1) shifts up as openAmount increases; lower shifts down slightly.
+        const rimJitter = BLOB_JITTER * 0.22 * (1 + param * 0.5);
+        for (const p of clam.particles) {
+            const lipShift = p.halfBit === 1
+                ? -clam.openAmount * CLAM_LIP_OPEN
+                :  clam.openAmount * CLAM_LIP_OPEN * 0.25;
+            const localX = p.rx;
+            const localY = p.ry + lipShift;
+            const restX  = clam.cx + localX * cosA - localY * sinA;
+            const restY  = clam.cy + localX * sinA + localY * cosA;
+            p.vx += (restX - p.x) * BLOB_SPRING_K;
+            p.vy += (restY - p.y) * BLOB_SPRING_K;
+            p.vx += rand(-rimJitter, rimJitter);
+            p.vy += rand(-rimJitter, rimJitter);
+            p.vx *= BLOB_DAMPING;
+            p.vy *= BLOB_DAMPING;
+            p.x  += p.vx;
+            p.y  += p.vy;
+        }
+    }
+}
+
+// ─── Jellyfish beat trigger ───────────────────────────────────────────────────
+function triggerBlobBeat(index) {
+    const blob = blobs[index];
+    if (!blob) return;
+
+    // Queue bell expansion — drained into expandScale at KICK_ACCEL rate each frame
+    blob.expandRemaining = 1.0;
+
+    // Tentacle splay — roots fan outward immediately; PBD lag propagates the wave to the tips
+    blob.tentacleSpreadScale = TENTACLE_SPREAD_BOOST;
+
+    // Inflate: boost persistent size, capped at INFLATE_MAX
+    if (INFLATE_ENABLED) {
+        blob.inflateScale = Math.min(blob.inflateScale + INFLATE_BOOST, INFLATE_MAX);
+    }
+
+    // Queue forward propulsion — drained into bkx/bky at KICK_ACCEL rate each frame.
+    // Jellyfish that trigger infrequently accumulate more energy and lunge further;
+    // rapid triggers fire on small charges, naturally self-limiting top speed.
+    blob.thrustRemaining = blob.energy * BLOB_BEAT_KICK * (blob.kickScale ?? 1.0);
+    blob.energy = 0;
+
+    // Whip tentacles with an impulse that decays toward the tip.
+    // In PBD: to add velocity dv, subtract dv from prevPos →
+    //   v_new = pos - (prevPos - dv) = (pos - prevPos) + dv  ✓
+    //
+    // The impulse is expressed in the jellyfish's own coordinate frame so it
+    // works correctly regardless of orientation:
+    //   headDX/Y  — unit vector pointing toward the apex (used for the whip)
+    //   perpDX/Y  — unit vector perpendicular to the head (used for lateral sway)
+    const headDX =  Math.sin(blob.angle);   // head direction matches rotation convention
+    const headDY = -Math.cos(blob.angle);
+    const perpDX =  Math.cos(blob.angle);   // 90° CCW from head
+    const perpDY =  Math.sin(blob.angle);
+
+    for (const chain of blob.tentacles) {
+        for (let si = 1; si < chain.length; si++) {   // skip root (si=0), it snaps to bell
+            const rootBias = 1 - si / chain.length;
+            const whip    = rand(3, 7)    * rootBias;
+            const lateral = rand(-2.5, 2.5) * rootBias;
+            // Subtract from prevPos to inject velocity in that direction
+            chain[si].px -= headDX * whip + perpDX * lateral;
+            chain[si].py -= headDY * whip + perpDY * lateral;
+        }
+    }
+}
+
+// ─── Clam beat trigger ────────────────────────────────────────────────────────
+function triggerClamBeat(ci) {
+    const clam = clams[ci];
+    if (!clam) return;
+    // Snap open: inject a positive openVel (spring will close it)
+    clam.openVel += 0.12 + rand(0, 0.04);
+    // Upward snap — clam launches itself off the "sea floor"
+    clam.cvy -= CLAM_SNAP_FORCE * (clam.kickScale ?? 1.0);
+    // Random tilt and spin — suppressed when Spin Max is 0 (upright/stable mode)
+    if (CLAM_SPIN_MAX > 0) {
+        clam.cvx += rand(-CLAM_SNAP_SPREAD, CLAM_SNAP_SPREAD) * (clam.kickScale ?? 1.0);
+        clam.spinVel += (rand(0, 1) < 0.5 ? 1 : -1) * rand(0.008, CLAM_SPIN_MAX);
+    }
+}
+
+// ─── Spotlight (solo mode) ────────────────────────────────────────────────────
+
+// Called each frame with the actual elapsed ms since last frame.
+// Updates per-blob activity signals, solo timers, and spotlight alpha.
+function updateSpotlights(dt) {
+    // 1. Refresh per-blob activity signal from beat triggers
+    for (const blob of blobs.concat(clams)) {
+        if (blob.detector?.justTriggered) {
+            blob.activitySmooth = 1.0;
+        } else {
+            blob.activitySmooth *= SOLO_ACTIVITY_DECAY;
+        }
+    }
+
+    // 2. Find the sole active blob, if any
+    let soloBlob = null, activeCount = 0;
+    for (const blob of blobs.concat(clams)) {
+        if (blob.activitySmooth > SOLO_ACTIVITY_THRESH) {
+            activeCount++;
+            soloBlob = blob;
+        }
+    }
+    if (activeCount !== 1) soloBlob = null;
+
+    // 3. Accumulate/drain soloMs; smooth spotlightAlpha toward target
+    for (const blob of blobs.concat(clams)) {
+        if (!SPOTLIGHT_ENABLED) {
+            blob.soloMs = 0;
+            blob.spotlightAlpha *= (1 - SPOTLIGHT_FADE_OUT);
+            continue;
+        }
+        if (blob === soloBlob) {
+            blob.soloMs = Math.min(blob.soloMs + dt, SOLO_THRESHOLD_MS * 2);
+        } else {
+            blob.soloMs = Math.max(0, blob.soloMs - dt * 3);
+        }
+        const targetAlpha = blob.soloMs >= SOLO_THRESHOLD_MS ? SPOTLIGHT_MAX_ALPHA : 0;
+        const rate = targetAlpha > blob.spotlightAlpha ? SPOTLIGHT_FADE_IN : SPOTLIGHT_FADE_OUT;
+        blob.spotlightAlpha += (targetAlpha - blob.spotlightAlpha) * rate;
+    }
+}
+
+// Draws the spotlight glow behind each eligible blob.
+// Must be called after background fill but before drawBlobs.
+function drawSpotlights() {
+    for (const blob of blobs) {
+        if (blob.spotlightAlpha < 0.001) continue;
+        const r    = BELL_RADIUS * SPOTLIGHT_RADIUS_MULT;
+        const a0   = blob.spotlightAlpha;
+        const a1   = (a0 * 0.4).toFixed(4);
+        const grad = ctx.createRadialGradient(blob.cx, blob.cy, 0, blob.cx, blob.cy, r);
+        grad.addColorStop(0,   `rgba(${blob.colorR},${blob.colorG},${blob.colorB},${a0.toFixed(4)})`);
+        grad.addColorStop(0.5, `rgba(${blob.colorR},${blob.colorG},${blob.colorB},${a1})`);
+        grad.addColorStop(1,   `rgba(${blob.colorR},${blob.colorG},${blob.colorB},0)`);
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(blob.cx, blob.cy, r, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// ─── Duo Link ─────────────────────────────────────────────────────────────────
+
+// Each particle owns a fixed position t ∈ [0,1] along the bA→bB axis plus a
+// fixed perpendicular offset. Its home point each frame is
+//   bA + t*(bB-bA) + perpAmt * perpVec
+// so the web reshapes naturally as the blobs move.
+// colorT = t gives an exact position-based color gradient from bA to bB.
+// Density is biased toward the blob ends (35% each) with 30% in the middle,
+// and the perpendicular spread envelope narrows toward the midpoint so the
+// web thins slightly there.
+function _createDuoParticles(bA, bB) {
+    const particles  = [];
+    const total      = DUO_LINK_PARTICLE_COUNT;
+    const nearCount  = Math.floor(total * 0.35);   // 35% near each blob
+    const midCount   = total - nearCount * 2;       // remainder in the middle
+
+    // Axis + perpendicular unit vectors at creation time (re-derived each frame in update).
+    const axLen = Math.hypot(bB.cx - bA.cx, bB.cy - bA.cy) || 1;
+    const ax = (bB.cx - bA.cx) / axLen, ay = (bB.cy - bA.cy) / axLen;
+    const perpX = -ay, perpY = ax;
+
+    function mkParticle(t) {
+        // Perpendicular spread profile: widest at the blob ends, narrows toward the midpoint.
+        // sin(π·t) peaks at t=0.5 → (1−sin) is 1 at ends and 0 at centre.
+        const profile = 1 - Math.sin(Math.PI * t);
+        const maxPerp = DUO_LINK_SPREAD * BELL_RADIUS * (0.42 + 0.58 * profile);
+        const perpAmt = rand(-maxPerp, maxPerp);
+        const wx = bA.cx + t * (bB.cx - bA.cx) + perpAmt * perpX;
+        const wy = bA.cy + t * (bB.cy - bA.cy) + perpAmt * perpY;
+        return { x: wx, y: wy, vx: 0, vy: 0, t, perpAmt, colorT: t, _prox: 0 };
+    }
+
+    for (let i = 0; i < nearCount; i++) particles.push(mkParticle(rand(0,    0.35)));
+    for (let i = 0; i < nearCount; i++) particles.push(mkParticle(rand(0.65, 1.0)));
+    for (let i = 0; i < midCount;  i++) particles.push(mkParticle(rand(0.25, 0.75)));
+    return particles;
+}
+
+// Each frame, re-derive the axis so the web reshapes as blobs move.
+// Each particle springs toward its fixed (t, perpAmt) home on the current axis.
+// Spring stiffness is slightly weaker at the midpoint so central particles
+// drift more freely, reinforcing the sparse, hazy middle appearance.
+function _updateDuoParticles(pair) {
+    const bA = pair.blobA, bB = pair.blobB;
+    const axLen = Math.hypot(bB.cx - bA.cx, bB.cy - bA.cy);
+    if (axLen < 1) return;
+    const ax = (bB.cx - bA.cx) / axLen, ay = (bB.cy - bA.cy) / axLen;
+    const perpX = -ay, perpY = ax;
+    for (const p of pair.particles) {
+        // Home point tracks the live blob positions
+        const homeX = bA.cx + p.t * (bB.cx - bA.cx) + p.perpAmt * perpX;
+        const homeY = bA.cy + p.t * (bB.cy - bA.cy) + p.perpAmt * perpY;
+        // Stiffness is weaker near t=0.5 — middle particles float more loosely
+        const mid     = 1 - Math.abs(p.t * 2 - 1);   // 0 at ends, 1 at centre
+        const springK = 0.0026 - 0.0012 * mid;
+        p.vx += (homeX - p.x) * springK + rand(-0.18, 0.18);
+        p.vy += (homeY - p.y) * springK + rand(-0.18, 0.18);
+        p.vx *= 0.93;
+        p.vy *= 0.93;
+        p.x  += p.vx;
+        p.y  += p.vy;
+    }
+}
+
+// Called each frame after updateSpotlights (which has already refreshed activitySmooth).
+function updateDuoLinks(dt) {
+    // ── Sync detection: find the best-scoring eligible pair ──────────────────
+    // Sync detection: for each candidate pair, count how many of A's recent triggers
+    // land within ±DUO_SYNC_TOLERANCE ms of any of B's triggers (and symmetrically).
+    // A pair is eligible when BOTH directional match counts reach DUO_SYNC_MIN_MATCHES.
+    // The best eligible pair (highest minimum match count) wins.
+    const now    = performance.now();
+    const cutoff = now - DUO_SYNC_WINDOW * 1000;
+    const allC   = blobs.concat(clams);
+
+    // Prune old entries once per frame for every creature
+    for (const c of allC) {
+        let i = 0;
+        while (i < c.triggerTimes.length && c.triggerTimes[i] < cutoff) i++;
+        if (i > 0) c.triggerTimes.splice(0, i);
+    }
+
+    // Count how many of `src` triggers are within tolerance of any `dst` trigger
+    function _matchCount(src, dst) {
+        let n = 0;
+        for (const tS of src) {
+            for (const tD of dst) {
+                if (Math.abs(tS - tD) <= DUO_SYNC_TOLERANCE) { n++; break; }
+            }
+        }
+        return n;
+    }
+
+    let bA = null, bB = null, bestScore = -1;
+    for (let i = 0; i < allC.length; i++) {
+        const tA = allC[i].triggerTimes;
+        if (tA.length < DUO_SYNC_MIN_MATCHES) continue;
+        for (let j = i + 1; j < allC.length; j++) {
+            const tB = allC[j].triggerTimes;
+            if (tB.length < DUO_SYNC_MIN_MATCHES) continue;
+            // Both directions must reach the threshold
+            const mAB = _matchCount(tA, tB);
+            if (mAB < DUO_SYNC_MIN_MATCHES) continue;
+            const mBA = _matchCount(tB, tA);
+            if (mBA < DUO_SYNC_MIN_MATCHES) continue;
+            const score = Math.min(mAB, mBA);
+            if (score > bestScore) { bestScore = score; bA = allC[i]; bB = allC[j]; }
+        }
+    }
+    const isDuo = bA !== null;
+
+    // Invalidate a stale pair (a member blob removed from the scene).
+    if (_duoPair && (!allC.includes(_duoPair.blobA) || !allC.includes(_duoPair.blobB))) {
+        _duoPair = null;
+    }
+
+    // Create a new pair when conditions are met and none exists yet.
+    if (!_duoPair && isDuo && DUO_LINK_ENABLED) {
+        _duoPair = { blobA: bA, blobB: bB, duoMs: 0, linkAlpha: 0,
+                     particles: _createDuoParticles(bA, bB) };
+    }
+    if (!_duoPair) return;
+
+    const pair      = _duoPair;
+    const pairMatch = isDuo && ((pair.blobA === bA && pair.blobB === bB) ||
+                                (pair.blobA === bB && pair.blobB === bA));
+
+    if (DUO_LINK_ENABLED && pairMatch) {
+        pair.duoMs = Math.min(pair.duoMs + dt, DUO_THRESHOLD_MS * 2);
+    } else {
+        pair.duoMs = Math.max(0, pair.duoMs - dt * 3);
+    }
+
+    const targetAlpha = (DUO_LINK_ENABLED && pair.duoMs >= DUO_THRESHOLD_MS) ? DUO_LINK_MAX_ALPHA : 0;
+    const rate = targetAlpha > pair.linkAlpha ? DUO_FADE_IN : DUO_FADE_OUT;
+    pair.linkAlpha += (targetAlpha - pair.linkAlpha) * rate;
+
+    // Once fully faded and drained, release the pair so a new one can form.
+    if (pair.linkAlpha < 0.001 && pair.duoMs <= 0) _duoPair = null;
+
+    // Move particles (only while visible to avoid pointless computation).
+    if (_duoPair && pair.linkAlpha > 0.001) _updateDuoParticles(pair);
+}
+
+// Draw the duo-link particle web.
+// Edge colour blends between the two blob colours by avg particle colorT.
+// Edge brightness is highest near each blob, fading toward the midpoint.
+function drawDuoLinks() {
+    if (!_duoPair || _duoPair.linkAlpha < 0.001) return;
+    const pair = _duoPair;
+    const bA = pair.blobA, bB = pair.blobB;
+    const _ac = blobs.concat(clams);
+    if (!_ac.includes(bA) || !_ac.includes(bB)) return;
+
+    const { particles, linkAlpha } = pair;
+    const edgeDist   = DUO_LINK_EDGE_DIST;
+    const edgeDistSq = edgeDist * edgeDist;
+
+    // Per-particle blob-proximity weight — drives the alpha tier, making edges
+    // near each blob glow brighter (mirrors how the bell web brightens near nodes).
+    const proxRange = BELL_RADIUS * 1.5 + edgeDist;
+    for (const p of particles) {
+        const dA = Math.hypot(p.x - bA.cx, p.y - bA.cy);
+        const dB = Math.hypot(p.x - bB.cx, p.y - bB.cy);
+        p._prox = Math.max(0, 1 - Math.min(dA, dB) / proxRange);
+    }
+
+    // Bucket edges: 5 colour bands × 3 alpha tiers.
+    // Combined alpha key = edgeProximity × blobProximity so only close edges near
+    // a blob reach the top tier; sparse mid-field edges stay in lower tiers.
+    const NC = 5, NA = 3;
+    const buckets = Array.from({ length: NC }, () => [[], [], []]);
+    for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+            const dx = particles[j].x - particles[i].x;
+            const dy = particles[j].y - particles[i].y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > edgeDistSq) continue;
+            const tProx  = 1 - Math.sqrt(d2) / edgeDist;
+            const prox   = (particles[i]._prox + particles[j]._prox) * 0.5;
+            const tColor = (particles[i].colorT + particles[j].colorT) * 0.5;
+            const ci     = Math.min(NC - 1, tColor * NC | 0);
+            const ai     = Math.min(NA - 1, tProx * prox * NA | 0);
+            buckets[ci][ai].push(i, j);
+        }
+    }
+
+    ctx.lineWidth = 0.65;
+    for (let ci = 0; ci < NC; ci++) {
+        const t = (ci + 0.5) / NC;
+        const r = (bA.colorR + (bB.colorR - bA.colorR) * t) | 0;
+        const g = (bA.colorG + (bB.colorG - bA.colorG) * t) | 0;
+        const b = (bA.colorB + (bB.colorB - bA.colorB) * t) | 0;
+        for (let ai = 0; ai < NA; ai++) {
+            const bucket = buckets[ci][ai];
+            if (!bucket.length) continue;
+            const alpha = linkAlpha * (ai + 1) / NA;
+            ctx.strokeStyle = `rgba(${r},${g},${b},${alpha.toFixed(4)})`;
+            ctx.beginPath();
+            for (let k = 0; k < bucket.length; k += 2) {
+                const pi = particles[bucket[k]], pj = particles[bucket[k + 1]];
+                ctx.moveTo(pi.x, pi.y);
+                ctx.lineTo(pj.x, pj.y);
+            }
+            ctx.stroke();
+        }
+    }
+}
+
+// ─── Draw jellyfish ───────────────────────────────────────────────────────────
+
+// Smooth quadratic-bezier path through an array of {x,y} points (no closing).
+function _smoothPath(pts) {
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 0; i < pts.length - 1; i++) {
+        const mx = (pts[i].x + pts[i + 1].x) * 0.5;
+        const my = (pts[i].y + pts[i + 1].y) * 0.5;
+        ctx.quadraticCurveTo(pts[i].x, pts[i].y, mx, my);
+    }
+    ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+}
+
+function drawBlobs() {
+    ctx.lineCap = 'round';
+
+    for (const blob of blobs) {
+        const param = blob.detector ? blob.detector.parameter : 0;
+        const { rimParticles, rimOnly, tentacles, cx, cy, colorR, colorG, colorB } = blob;
+        if (rimParticles.length < 3) continue;
+
+        // apex = topmost rim particle (the midpoint of the semicircle arc)
+        const apex = rimOnly[Math.floor(rimOnly.length / 2)];
+
+        // ── 1. Tentacles (drawn first — behind the bell) ──────────────────────
+        for (const chain of tentacles) {
+            if (chain.length < 2) continue;
+            const root = chain[0];
+            const tip  = chain[chain.length - 1];
+
+            // Gradient fades from base (semi-opaque) to tip (transparent)
+            // sp: 0 at rest, peaks ~0.4 at full splay — drives extra thickness and glow
+            const sp   = blob.tentacleSpreadScale - 1.0;
+            const grad = ctx.createLinearGradient(root.x, root.y, tip.x, tip.y);
+            const a0   = 0.40 + param * 0.25 + sp * 0.35;
+            grad.addColorStop(0,    `rgba(${colorR},${colorG},${colorB},${a0})`);
+            grad.addColorStop(0.55, `rgba(${colorR},${colorG},${colorB},${a0 * 0.38})`);
+            grad.addColorStop(1,    `rgba(${colorR},${colorG},${colorB},0)`);
+
+            ctx.beginPath();
+            _smoothPath(chain);
+            ctx.strokeStyle = grad;
+            ctx.lineWidth   = 1.0 + param * 0.8 + sp * 2.5;
+            ctx.shadowColor = `rgba(${colorR},${colorG},${colorB},${0.25 + sp * 0.4})`;
+            ctx.shadowBlur  = 4 + param * 8 + sp * 14;
+            ctx.stroke();
+        }
+        ctx.shadowBlur = 0;
+
+        // Control point for the convex closing edge — pushed outward from bell center
+        // so both the fill and stroke share the same slight outward bow
+        const _roFirst = rimOnly[0], _roLast = rimOnly[rimOnly.length - 1];
+        const _rimMidX = (_roFirst.x + _roLast.x) / 2;
+        const _rimMidY = (_roFirst.y + _roLast.y) / 2;
+        const _rimOdx  = _rimMidX - cx,  _rimOdy = _rimMidY - cy;
+        const _rimOlen = Math.sqrt(_rimOdx * _rimOdx + _rimOdy * _rimOdy) || 1;
+        const _rimCpx  = _rimMidX + (_rimOdx / _rimOlen) * BELL_RADIUS * 0.2;
+        const _rimCpy  = _rimMidY + (_rimOdy / _rimOlen) * BELL_RADIUS * 0.2;
+
+        // ── 2. Faint hull fill using rim outline ──────────────────────────────
+        ctx.beginPath();
+        _smoothPath(rimOnly);
+        ctx.quadraticCurveTo(_rimCpx, _rimCpy, _roFirst.x, _roFirst.y);
+        ctx.closePath();
+        const fill = ctx.createRadialGradient(apex.x, apex.y, 0, cx, cy, BELL_RADIUS * 1.1);
+        fill.addColorStop(0,   `rgba(${colorR},${colorG},${colorB},${0.13 + param * 0.10})`);
+        fill.addColorStop(0.6, `rgba(${colorR},${colorG},${colorB},${0.05 + param * 0.04})`);
+        fill.addColorStop(1,   `rgba(${colorR},${colorG},${colorB},0.01)`);
+        ctx.fillStyle = fill;
+        ctx.fill();
+
+        // ── 3. Web edges between all bell particles ───────────────────────────
+        // BLOB_EDGE_DIST (slider) controls connection radius.
+        // Edges are bucketed into 4 alpha tiers and batch-stroked to minimise GPU state changes.
+        const webDist   = BLOB_EDGE_DIST;
+        const webDistSq = webDist * webDist;
+        const webAlpha0 = 0.07 + param * 0.22;
+        ctx.lineWidth = 0.7;
+        {
+            const buckets = [[], [], [], []];
+            for (let i = 0; i < rimParticles.length; i++) {
+                for (let j = i + 1; j < rimParticles.length; j++) {
+                    const dx     = rimParticles[j].x - rimParticles[i].x;
+                    const dy     = rimParticles[j].y - rimParticles[i].y;
+                    const distSq = dx * dx + dy * dy;
+                    if (distSq > webDistSq) continue;
+                    const t = 1 - Math.sqrt(distSq) / webDist;
+                    buckets[Math.min(3, t * 4 | 0)].push(i, j);
+                }
+            }
+            for (let b = 0; b < 4; b++) {
+                if (!buckets[b].length) continue;
+                const a = webAlpha0 * ((b + 0.5) / 4);
+                ctx.strokeStyle = `rgba(${colorR},${colorG},${colorB},${a})`;
+                ctx.beginPath();
+                for (let k = 0; k < buckets[b].length; k += 2) {
+                    const pi = rimParticles[buckets[b][k]], pj = rimParticles[buckets[b][k + 1]];
+                    ctx.moveTo(pi.x, pi.y);
+                    ctx.lineTo(pj.x, pj.y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        // ── 4. Outer rim glow stroke ──────────────────────────────────────────
+        ctx.beginPath();
+        _smoothPath(rimOnly);
+        ctx.quadraticCurveTo(_rimCpx, _rimCpy, _roFirst.x, _roFirst.y);
+        ctx.shadowColor = `rgba(${colorR},${colorG},${colorB},0.75)`;
+        ctx.shadowBlur  = 8 + param * 14;
+        ctx.strokeStyle = `rgba(${colorR},${colorG},${colorB},${0.45 + param * 0.28})`;
+        ctx.lineWidth   = 1.4;
+        ctx.stroke();
+        ctx.shadowBlur  = 0;
+
+        // ── 5. Particle dots — rim larger/brighter, interior smaller ──────────
+        ctx.shadowColor = `rgba(${colorR},${colorG},${colorB},0.85)`;
+        ctx.shadowBlur  = 4 + param * 9;
+        for (const p of rimParticles) {
+            const r = p.rim ? NODE_BASE_RADIUS * 0.70 : NODE_BASE_RADIUS * 0.48;
+            const a = p.rim ? (0.75 + param * 0.20) : (0.48 + param * 0.30);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${colorR},${colorG},${colorB},${a})`;
+            ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+    }
+}
+
+// ─── Draw clams ───────────────────────────────────────────────────────────────
+function drawClams() {
+    ctx.lineCap = 'round';
+
+    for (const clam of clams) {
+        if (clam.particles.length < 3) continue;
+        const param = clam.detector ? clam.detector.parameter : 0;
+        const { particles, upperRim, lowerRim, cx, cy, colorR, colorG, colorB } = clam;
+
+        // ── 1. Upper shell fill ───────────────────────────────────────────────
+        const apexU = upperRim[Math.floor(upperRim.length / 2)];
+        ctx.beginPath();
+        _smoothPath(upperRim);
+        ctx.lineTo(upperRim[0].x, upperRim[0].y);
+        const fillU = ctx.createRadialGradient(apexU.x, apexU.y, 0, cx, cy, CLAM_SHELL_W * 1.15);
+        fillU.addColorStop(0,    `rgba(${colorR},${colorG},${colorB},${(0.12 + param * 0.08).toFixed(3)})`);
+        fillU.addColorStop(0.65, `rgba(${colorR},${colorG},${colorB},${(0.05 + param * 0.03).toFixed(3)})`);
+        fillU.addColorStop(1,    `rgba(${colorR},${colorG},${colorB},0.01)`);
+        ctx.fillStyle = fillU;
+        ctx.fill();
+
+        // ── 2. Lower shell fill ───────────────────────────────────────────────
+        const apexL = lowerRim[Math.floor(lowerRim.length / 2)];
+        ctx.beginPath();
+        _smoothPath(lowerRim);
+        ctx.lineTo(lowerRim[0].x, lowerRim[0].y);
+        const fillL = ctx.createRadialGradient(apexL.x, apexL.y, 0, cx, cy, CLAM_SHELL_W * 1.15);
+        fillL.addColorStop(0,    `rgba(${colorR},${colorG},${colorB},${(0.10 + param * 0.06).toFixed(3)})`);
+        fillL.addColorStop(0.65, `rgba(${colorR},${colorG},${colorB},${(0.04 + param * 0.03).toFixed(3)})`);
+        fillL.addColorStop(1,    `rgba(${colorR},${colorG},${colorB},0.01)`);
+        ctx.fillStyle = fillL;
+        ctx.fill();
+
+        // ── 3. Particle web edges (same bucket system as jellyfish bell) ──────
+        const webDist   = CLAM_EDGE_DIST;
+        const webDistSq = webDist * webDist;
+        const webAlpha0 = 0.07 + param * 0.22;
+        ctx.lineWidth = 0.7;
+        {
+            const buckets = [[], [], [], []];
+            for (let i = 0; i < particles.length; i++) {
+                for (let j = i + 1; j < particles.length; j++) {
+                    const dx = particles[j].x - particles[i].x;
+                    const dy = particles[j].y - particles[i].y;
+                    const dSq = dx * dx + dy * dy;
+                    if (dSq > webDistSq) continue;
+                    const t = 1 - Math.sqrt(dSq) / webDist;
+                    buckets[Math.min(3, t * 4 | 0)].push(i, j);
+                }
+            }
+            for (let b = 0; b < 4; b++) {
+                if (!buckets[b].length) continue;
+                const a = webAlpha0 * ((b + 0.5) / 4);
+                ctx.strokeStyle = `rgba(${colorR},${colorG},${colorB},${a})`;
+                ctx.beginPath();
+                for (let k = 0; k < buckets[b].length; k += 2) {
+                    const pi = particles[buckets[b][k]], pj = particles[buckets[b][k + 1]];
+                    ctx.moveTo(pi.x, pi.y);
+                    ctx.lineTo(pj.x, pj.y);
+                }
+                ctx.stroke();
+            }
+        }
+
+        // ── 4. Rim glow — upper arc ───────────────────────────────────────────
+        ctx.beginPath();
+        _smoothPath(upperRim);
+        ctx.shadowColor = `rgba(${colorR},${colorG},${colorB},0.70)`;
+        ctx.shadowBlur  = 7 + param * 12;
+        ctx.strokeStyle = `rgba(${colorR},${colorG},${colorB},${(0.42 + param * 0.26).toFixed(3)})`;
+        ctx.lineWidth   = 1.3;
+        ctx.stroke();
+
+        // ── 5. Rim glow — lower arc ───────────────────────────────────────────
+        ctx.beginPath();
+        _smoothPath(lowerRim);
+        ctx.strokeStyle = `rgba(${colorR},${colorG},${colorB},${(0.30 + param * 0.18).toFixed(3)})`;
+        ctx.lineWidth   = 1.1;
+        ctx.stroke();
+        ctx.shadowBlur  = 0;
+
+        // ── 6. Lip gap line (the opening between the two shells) ──────────────
+        // Connects the left and right lip endpoints; fades in as the clam opens.
+        if (clam.openAmount > 0.01) {
+            const lipAlpha = Math.min(0.35, clam.openAmount * 0.6);
+            const uL = upperRim[upperRim.length - 1];  // upper left lip
+            const uR = upperRim[0];                    // upper right lip
+            const lR = lowerRim[0];                    // lower right lip
+            const lL = lowerRim[lowerRim.length - 1];  // lower left lip
+            ctx.beginPath();
+            ctx.moveTo(uR.x, uR.y); ctx.lineTo(lR.x, lR.y);
+            ctx.moveTo(uL.x, uL.y); ctx.lineTo(lL.x, lL.y);
+            ctx.strokeStyle = `rgba(${colorR},${colorG},${colorB},${lipAlpha.toFixed(3)})`;
+            ctx.lineWidth   = 0.8;
+            ctx.stroke();
+        }
+
+        // ── 7. Particle dots ─────────────────────────────────────────────────
+        ctx.shadowColor = `rgba(${colorR},${colorG},${colorB},0.85)`;
+        ctx.shadowBlur  = 3 + param * 8;
+        for (const p of particles) {
+            const r = p.rim ? 1.9 * 0.68 : 1.9 * 0.44;
+            const a = p.rim ? (0.70 + param * 0.20) : (0.44 + param * 0.28);
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${colorR},${colorG},${colorB},${a})`;
+            ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+    }
+}
+
+// ─── Spawn helpers ────────────────────────────────────────────────────────────
+function spawnShockwave(blob) {
+    if (!blob) return;
+    shockwaves.push({
+        x: blob.cx, y: blob.cy,
+        radius: 0, maxRadius: SHOCKWAVE_MAX_R,
+        life: 60, maxLife: 60,
+        color: blob.effectColor,
+        er: blob.effectR, eg: blob.effectG, eb: blob.effectB,
+        speed: SHOCKWAVE_SPEED * blob.effectSpeed,
+    });
+}
+
+function spawnPolygon(blob) {
+    if (!blob) return;
+    polygonFlashes.push({
+        progress: 0,
+        sides:    randInt(5, 8),
+        rotation: rand(0, Math.PI * 2),
+        opacity:  0.9,
+        cx: blob.cx, cy: blob.cy,
+        color: blob.effectColor,
+        er: blob.effectR, eg: blob.effectG, eb: blob.effectB,
+        speed: POLYGON_EXPAND_RATE * blob.effectSpeed,
+    });
+}
+
+function spawnSparks(blob) {
+    if (!blob) return;
+    const src = blob.rimParticles;
+    if (!src || !src.length) return;
+    const p     = src[randInt(0, src.length - 1)];
+    const count = randInt(15, 25);
+    for (let i = 0; i < count; i++) {
+        const angle = rand(0, Math.PI * 2);
+        const speed = rand(1.5, 4.5) * blob.effectSpeed;
+        sparks.push({
+            x: p.x, y: p.y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: rand(18, 36), maxLife: 36,
+            color: blob.effectColor,
+            er: blob.effectR, eg: blob.effectG, eb: blob.effectB,
+        });
+    }
+}
+
+function triggerBlobEffect(blob) {
+    switch (blob.effect) {
+        case 'shockwave': spawnShockwave(blob); break;
+        case 'polygon':   spawnPolygon(blob);   break;
+        case 'sparks':    spawnSparks(blob);    break;
+    }
+}
+
+// ─── Draw effects ─────────────────────────────────────────────────────────────
+function drawShockwaves() {
+    for (let i = shockwaves.length - 1; i >= 0; i--) {
+        const sw = shockwaves[i];
+        sw.radius += sw.speed;
+        sw.life--;
+        if (sw.life <= 0 || sw.radius > sw.maxRadius) { shockwaves.splice(i, 1); continue; }
+
+        const alpha     = (sw.life / sw.maxLife) * 0.7;
+        const lineWidth = 1.5 + (1 - sw.radius / sw.maxRadius) * 2.5;
+        ctx.beginPath();
+        ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(${sw.er},${sw.eg},${sw.eb},${alpha})`;
+        ctx.lineWidth   = lineWidth;
+        ctx.shadowColor = `rgba(${sw.er},${sw.eg},${sw.eb},0.6)`;
+        ctx.shadowBlur  = 8;
+        ctx.stroke();
+        ctx.shadowBlur  = 0;
+    }
+}
+
+function drawPolygonFlashes() {
+    for (let i = polygonFlashes.length - 1; i >= 0; i--) {
+        const pf = polygonFlashes[i];
+        const scale = pf.progress;
+        pf.progress += pf.speed;
+        if (pf.progress > POLYGON_MAX_SCALE) { polygonFlashes.splice(i, 1); continue; }
+
+        const t       = pf.progress / POLYGON_MAX_SCALE;
+        const opacity = pf.opacity * (1 - t);
+        ctx.beginPath();
+        for (let j = 0; j <= pf.sides; j++) {
+            const angle = pf.rotation + (j / pf.sides) * Math.PI * 2;
+            const px    = pf.cx + Math.cos(angle) * scale;
+            const py    = pf.cy + Math.sin(angle) * scale;
+            if (j === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.strokeStyle = `rgba(${pf.er},${pf.eg},${pf.eb},${opacity})`;
+        ctx.lineWidth   = 2;
+        ctx.shadowColor = `rgba(${pf.er},${pf.eg},${pf.eb},${opacity * 0.8})`;
+        ctx.shadowBlur  = 12;
+        ctx.stroke();
+        ctx.shadowBlur  = 0;
+    }
+}
+
+function drawSparks() {
+    for (let i = sparks.length - 1; i >= 0; i--) {
+        const s = sparks[i];
+        s.x += s.vx; s.y += s.vy;
+        s.vx *= 0.94; s.vy *= 0.94;
+        s.life--;
+        if (s.life <= 0) { sparks.splice(i, 1); continue; }
+
+        const alpha = s.life / s.maxLife;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 1.5 * alpha + 0.5, 0, Math.PI * 2);
+        ctx.fillStyle   = `rgba(${s.er},${s.eg},${s.eb},${alpha})`;
+        ctx.shadowColor = `rgba(${s.er},${s.eg},${s.eb},${alpha * 0.6})`;
+        ctx.shadowBlur  = 6;
+        ctx.fill();
+        ctx.shadowBlur  = 0;
+    }
+}
+
+// ─── Live audio mode ──────────────────────────────────────────────────────────
+function ensureDetectors() {
+    for (const blob of blobs) {
+        if (!blob.detector) {
+            blob.detector = new BeatDetector({
+                targetHz:        blob.detectorHz,
+                rangeHz:         blob.detectorRangeHz,
+                octaves:         blob.detectorOctaves,
+                triggerDuration: blob.detectorDuration,
+                name:            blob.name,
+            });
+        }
+    }
+    if (!subD) {
+        subD = new BeatDetector({ targetHz: 150, rangeHz: 30, octaves: 2, triggerDuration: 16, name: 'Sub' });
+    }
+    if (!_flashDetector) {
+        const p = _flashHzParams(BLOB_FLASH_HZ);
+        _flashDetector = new BeatDetector({ targetHz: BLOB_FLASH_HZ, rangeHz: p.rangeHz, octaves: p.octaves, triggerDuration: p.duration, name: 'Flash' });
+        _flashDetector.idleDecayRate = IDLE_DECAY_RATE; _flashDetector.freqDecayBias = FREQ_DECAY_BIAS; _flashDetector.minFluxFloor = MIN_FLUX_FLOOR;
+    }
+    if (!_particleTrigDetector) {
+        const p = _flashHzParams(PARTICLE_TRIGGER_HZ);
+        _particleTrigDetector = new BeatDetector({ targetHz: PARTICLE_TRIGGER_HZ, rangeHz: p.rangeHz, octaves: p.octaves, triggerDuration: p.duration, name: 'PrtTrig' });
+        _particleTrigDetector.idleDecayRate = IDLE_DECAY_RATE; _particleTrigDetector.freqDecayBias = FREQ_DECAY_BIAS; _particleTrigDetector.minFluxFloor = MIN_FLUX_FLOOR;
+    }
+    for (const clam of clams) {
+        if (!clam.detector) {
+            clam.detector = new BeatDetector({
+                targetHz:        clam.detectorHz,
+                rangeHz:         clam.detectorRangeHz,
+                octaves:         clam.detectorOctaves,
+                triggerDuration: clam.detectorDuration,
+                name:            clam.name,
+            });
+        }
+    }
+    // Sync runtime-adjustable threshold parameters to all detectors
+    for (const b of blobs) if (b.detector) { b.detector.idleDecayRate = IDLE_DECAY_RATE; b.detector.freqDecayBias = FREQ_DECAY_BIAS; b.detector.minFluxFloor = MIN_FLUX_FLOOR; }
+    for (const c of clams) if (c.detector) { c.detector.idleDecayRate = IDLE_DECAY_RATE; c.detector.freqDecayBias = FREQ_DECAY_BIAS; c.detector.minFluxFloor = MIN_FLUX_FLOOR; }
+    if (subD) { subD.idleDecayRate = IDLE_DECAY_RATE; subD.freqDecayBias = FREQ_DECAY_BIAS; subD.minFluxFloor = MIN_FLUX_FLOOR; }
+    if (_flashDetector) { _flashDetector.idleDecayRate = IDLE_DECAY_RATE; _flashDetector.freqDecayBias = FREQ_DECAY_BIAS; _flashDetector.minFluxFloor = MIN_FLUX_FLOOR; }
+    if (_particleTrigDetector) { _particleTrigDetector.idleDecayRate = IDLE_DECAY_RATE; _particleTrigDetector.freqDecayBias = FREQ_DECAY_BIAS; _particleTrigDetector.minFluxFloor = MIN_FLUX_FLOOR; }
+    initDetectorGraphs();
+}
+
+async function startLiveMode() {
+    try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+            audio: true,
+            video: { frameRate: { ideal: 1 } }   // video required by Chrome; stopped immediately
+        });
+
+        // Drop the video track — we only want audio
+        stream.getVideoTracks().forEach(t => t.stop());
+
+        const audioTracks = stream.getAudioTracks();
+        if (!audioTracks.length) {
+            statusEl.textContent = 'No audio track — enable "Share system audio"';
+            stream.getTracks().forEach(t => t.stop());
+            return;
+        }
+
+        // Build the live audio graph
+        liveStream   = stream;
+        liveContext  = new AudioContext();
+        liveAnalyser = liveContext.createAnalyser();
+        liveAnalyser.fftSize = 2048;
+        liveFreqData = new Float32Array(liveAnalyser.frequencyBinCount);
+
+        // Connect source → analyser (NOT to destination — avoids echo)
+        liveContext.createMediaStreamSource(stream).connect(liveAnalyser);
+
+        // Ensure detectors exist, then reset them all (clear stale flux history)
+        ensureDetectors();
+        for (const blob of blobs) if (blob.detector) blob.detector.reset();
+        for (const clam of clams) if (clam.detector) clam.detector.reset();
+        if (subD) subD.reset();
+        if (_flashDetector) _flashDetector.reset();
+        if (_particleTrigDetector) _particleTrigDetector.reset();
+
+        // Pause file audio if it was playing
+        if (audio && playing) {
+            audio.pause();
+            playing = false;
+            playBtn.textContent = 'Play';
+        }
+
+        eqByteData = null;   // reallocate with correct size from new analyser
+
+        liveMode = true;
+        liveModeBtn.textContent = '📁 File';
+        liveModeBtn.classList.add('active');
+        statusEl.textContent = 'Live';
+
+        // Auto-stop when user ends screen share
+        audioTracks[0].addEventListener('ended', stopLiveMode);
+
+    } catch (err) {
+        if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+            statusEl.textContent = 'Live audio unavailable';
+        }
+        // User cancelled dialog — silently ignore
+    }
+}
+
+function stopLiveMode() {
+    if (liveStream)  { liveStream.getTracks().forEach(t => t.stop()); liveStream = null; }
+    if (liveContext) { liveContext.close(); liveContext = null; }
+    liveAnalyser = null;
+    liveFreqData = null;
+    eqByteData   = null;   // reallocate with correct size on return to file mode
+    for (const blob of blobs) if (blob.detector) blob.detector.reset();
+    if (subD) subD.reset();
+    if (_flashDetector) _flashDetector.reset();
+    if (_particleTrigDetector) _particleTrigDetector.reset();
+    liveMode = false;
+    liveModeBtn.textContent = '🎤 Live';
+    liveModeBtn.classList.remove('active');
+    statusEl.textContent = playing ? 'Playing' : 'Idle';
+}
+
+liveModeBtn.addEventListener('click', () => {
+    if (liveMode) stopLiveMode(); else startLiveMode();
+});
+
+// ─── Spawn modal ──────────────────────────────────────────────────────────────
+let _spawnType = 'jelli';   // 'jelli' or 'clam' — set by which button opens the modal
+let _editTarget = null;     // { entity, type } when editing an existing creature, null when spawning new
+const spawnModal   = document.getElementById('spawn-modal');
+const spawnOkBtn   = document.getElementById('spawn-ok');
+const spawnCancel  = document.getElementById('spawn-cancel');
+const spEspeed     = document.getElementById('sp-espeed');
+const spEspeedVal  = document.getElementById('sp-espeed-val');
+const spKick       = document.getElementById('sp-kick');
+const spKickVal    = document.getElementById('sp-kick-val');
+
+addJelliBtn.addEventListener('click', () => {
+    _spawnType = 'jelli';
+    document.getElementById('spawn-modal-title').textContent = 'New Jellyfish';
+    spawnModal.classList.add('open');
+});
+const addClamBtn = document.getElementById('add-clam-btn');
+addClamBtn.addEventListener('click', () => {
+    _spawnType = 'clam';
+    document.getElementById('spawn-modal-title').textContent = 'New Clam';
+    spawnModal.classList.add('open');
+});
+spawnCancel.addEventListener('click', () => {
+    _editTarget = null;
+    spawnOkBtn.textContent = 'Spawn';
+    spawnModal.classList.remove('open');
+});
+spawnModal.addEventListener('click', e => {
+    if (e.target === spawnModal) {
+        _editTarget = null;
+        spawnOkBtn.textContent = 'Spawn';
+        spawnModal.classList.remove('open');
+    }
+});
+
+spEspeed.addEventListener('input', () => { spEspeedVal.textContent = parseFloat(spEspeed.value).toFixed(1) + '×'; });
+spKick.addEventListener('input',   () => { spKickVal.textContent   = parseFloat(spKick.value).toFixed(1)   + '×'; });
+
+spawnOkBtn.addEventListener('click', () => {
+    const hz      = Math.max(20, Math.min(20000, parseFloat(document.getElementById('sp-hz').value)    || 100));
+    const color   = document.getElementById('sp-color').value;
+    const effect  = document.getElementById('sp-effect').value;
+    const ecol    = document.getElementById('sp-ecol').value;
+    const espeed  = parseFloat(spEspeed.value) || 1.0;
+    const kick    = parseFloat(spKick.value)   || 1.0;
+    const name    = (document.getElementById('sp-name').value.trim() || 'Jelli').slice(0, 20);
+
+    // Pick detector range/octaves based on frequency
+    const rangeHz  = hz < 200 ? 10  : hz < 2000 ? 60  : 500;
+    const octaves  = hz < 200 ? 1   : hz < 2000 ? 3   : 2;
+    const duration = hz < 200 ? 8   : hz < 2000 ? 10  : 6;
+
+    if (_editTarget !== null) {
+        // Edit existing creature
+        const ent = _editTarget.entity;
+        ent.name        = name;
+        ent.color       = color;  [ent.colorR,  ent.colorG,  ent.colorB]  = _hexRgb(color);
+        ent.effect      = effect;
+        ent.effectColor = ecol;   [ent.effectR, ent.effectG, ent.effectB] = _hexRgb(ecol);
+        ent.effectSpeed = espeed;
+        ent.kickScale   = kick;
+        if (ent.detectorHz !== hz) {
+            ent.detectorHz = hz; ent.detectorRangeHz = rangeHz;
+            ent.detectorOctaves = octaves; ent.detectorDuration = duration;
+            if (ent.detector) { ent.detector.targetHz = hz; ent.detector.reset(); }
+        }
+        if (_editTarget.type === 'jelli') { buildJelliList(); } else { buildClamList(); }
+        buildFreqSliders();
+        _editTarget = null;
+        spawnOkBtn.textContent = 'Spawn';
+        spawnModal.classList.remove('open');
+        return;
+    }
+
+    if (_spawnType === 'clam') {
+        spawnClam({ name, detectorHz: hz, detectorRangeHz: rangeHz, detectorOctaves: octaves, detectorDuration: duration, color, effect, effectColor: ecol, effectSpeed: espeed, kickScale: kick });
+    } else {
+        spawnJellyfish({ name, detectorHz: hz, detectorRangeHz: rangeHz, detectorOctaves: octaves, detectorDuration: duration, color, effect, effectColor: ecol, effectSpeed: espeed, kickScale: kick });
+    }
+    spawnModal.classList.remove('open');
+});
+
+// ─── Audio / file list setup ──────────────────────────────────────────────────
+async function loadFileList() {
+    let files = PROVIDED_FILES;
+    try {
+        const res = await fetch('audioFileList.json');
+        if (res.ok) files = await res.json();
+    } catch (_) { /* use fallback */ }
+
+    while (fileSelect.options.length > 1) fileSelect.remove(1);
+    for (const f of files) {
+        const opt = document.createElement('option');
+        opt.value = f;
+        opt.textContent = f.replace('AudioFiles/', '');
+        fileSelect.appendChild(opt);
+    }
+    if (files.length > 0) fileSelect.value = files[0];
+}
+
+function setupAudio() {
+    const src = fileSelect.value;
+    if (!src) { statusEl.textContent = 'No file selected'; return; }
+
+    if (!audio) {
+        audio = new Audio();
+        audio.loop = true;
+        audio.addEventListener('seeked', () => { if (manager) manager.reset(); });
+    }
+
+    if (!manager) {
+        audio.src = src;
+        manager = new BeatDetectorManager(audio, { fftSize: 2048 });
+        manager.init();
+
+        // Create per-blob detectors (standalone, not registered with manager)
+        for (const blob of blobs) {
+            if (!blob.detector) {
+                blob.detector = new BeatDetector({
+                    targetHz:        blob.detectorHz,
+                    rangeHz:         blob.detectorRangeHz,
+                    octaves:         blob.detectorOctaves,
+                    triggerDuration: blob.detectorDuration,
+                    name:            blob.name,
+                });
+            }
+        }
+        // Clam detectors
+        for (const clam of clams) {
+            if (!clam.detector) {
+                clam.detector = new BeatDetector({
+                    targetHz:        clam.detectorHz,
+                    rangeHz:         clam.detectorRangeHz,
+                    octaves:         clam.detectorOctaves,
+                    triggerDuration: clam.detectorDuration,
+                    name:            clam.name,
+                });
+            }
+        }
+        // Background wash detector (no blob)
+        if (!subD) {
+            subD = new BeatDetector({ targetHz: 150, rangeHz: 30, octaves: 2, triggerDuration: 16, name: 'Sub' });
+        }
+        if (!_flashDetector) {
+            const p = _flashHzParams(BLOB_FLASH_HZ);
+            _flashDetector = new BeatDetector({ targetHz: BLOB_FLASH_HZ, rangeHz: p.rangeHz, octaves: p.octaves, triggerDuration: p.duration, name: 'Flash' });
+            _flashDetector.idleDecayRate = IDLE_DECAY_RATE; _flashDetector.freqDecayBias = FREQ_DECAY_BIAS; _flashDetector.minFluxFloor = MIN_FLUX_FLOOR;
+        }
+        if (!_particleTrigDetector) {
+            const p = _flashHzParams(PARTICLE_TRIGGER_HZ);
+            _particleTrigDetector = new BeatDetector({ targetHz: PARTICLE_TRIGGER_HZ, rangeHz: p.rangeHz, octaves: p.octaves, triggerDuration: p.duration, name: 'PrtTrig' });
+            _particleTrigDetector.idleDecayRate = IDLE_DECAY_RATE; _particleTrigDetector.freqDecayBias = FREQ_DECAY_BIAS; _particleTrigDetector.minFluxFloor = MIN_FLUX_FLOOR;
+        }
+
+        audio.addEventListener('canplay', () => {
+            audio.play(); playing = true;
+            playBtn.textContent = 'Pause'; statusEl.textContent = 'Playing';
+        });
+        audio.addEventListener('ended', () => {
+            playing = false; playBtn.textContent = 'Play'; statusEl.textContent = 'Ended';
+        });
+        audio.load();
+    } else {
+        audio.pause();
+        audio.src = src;
+        manager.reset();
+        audio.load();
+        audio.addEventListener('canplay', () => {
+            audio.play(); playing = true;
+            playBtn.textContent = 'Pause'; statusEl.textContent = 'Playing';
+        }, { once: true });
+    }
+}
+
+// ─── Play / pause ─────────────────────────────────────────────────────────────
+playBtn.addEventListener('click', () => {
+    if (liveMode) stopLiveMode();
+    if (!audio || !manager) { setupAudio(); return; }
+    if (playing) {
+        audio.pause(); playing = false;
+        playBtn.textContent = 'Play'; statusEl.textContent = 'Paused';
+    } else {
+        audio.play(); playing = true;
+        playBtn.textContent = 'Pause'; statusEl.textContent = 'Playing';
+    }
+});
+
+fileSelect.addEventListener('change', () => {
+    if (audio && manager) setupAudio();
+});
+
+// ─── Bottom panel ─────────────────────────────────────────────────────────────
+let panelOpenH = Math.round(window.innerHeight * 0.40);   // px — restored on open
+let activeTab  = 'controls';
+
+function togglePanel(open) {
+    panelOpen = (open !== undefined) ? open : !panelOpen;
+    bottomPanel.classList.toggle('open', panelOpen);
+    bottomPanel.style.height = panelOpen ? panelOpenH + 'px' : '24px';
+}
+
+// Tab switching
+document.getElementById('panel-tabs').addEventListener('click', e => {
+    const btn = e.target.closest('.panel-tab');
+    if (!btn) return;
+    const tab = btn.dataset.tab;
+    if (!panelOpen) togglePanel(true);
+    if (tab === activeTab) return;
+    activeTab = tab;
+    document.querySelectorAll('.panel-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+});
+
+panelToggle.addEventListener('click', () => togglePanel());
+clearLogBtn.addEventListener('click', () => { beatLog.innerHTML = ''; });
+
+// Resize: drag the top handle to set panel height
+const panelResize = document.getElementById('panel-resize');
+let _resizing = false;
+panelResize.addEventListener('mousedown', e => {
+    if (!panelOpen) return;
+    _resizing = true;
+    bottomPanel.classList.add('resizing');
+    e.preventDefault();
+});
+document.addEventListener('mousemove', e => {
+    if (!_resizing) return;
+    const newH = Math.max(80, Math.min(window.innerHeight - 85, window.innerHeight - e.clientY));
+    panelOpenH = newH;
+    bottomPanel.style.height = newH + 'px';
+});
+document.addEventListener('mouseup', () => {
+    if (!_resizing) return;
+    _resizing = false;
+    bottomPanel.classList.remove('resizing');
+});
+
+// ─── Playback / scrub bar ─────────────────────────────────────────────────────
+function seekToFraction(frac) {
+    if (!audio || !isFinite(audio.duration) || audio.duration === 0) return;
+    audio.currentTime = frac * audio.duration;
+    const pctStr = `${(frac * 100).toFixed(3)}%`;
+    scrubFill.style.width   = pctStr;
+    scrubThumb.style.left   = pctStr;
+    timeCurrent.textContent = formatTime(audio.currentTime);
+}
+
+function scrubFractionFromEvent(e) {
+    const rect = scrubTrack.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+}
+
+scrubTrack.addEventListener('mousedown', e => {
+    e.preventDefault();
+    isScrubbing = true;
+    scrubTrack.classList.add('is-scrubbing');
+    seekToFraction(scrubFractionFromEvent(e));
+});
+
+document.addEventListener('mousemove', e => {
+    if (!isScrubbing) return;
+    seekToFraction(scrubFractionFromEvent(e));
+});
+
+document.addEventListener('mouseup', () => {
+    if (!isScrubbing) return;
+    isScrubbing = false;
+    scrubTrack.classList.remove('is-scrubbing');
+});
+
+function updatePlaybackBar() {
+    if (!audio || !isFinite(audio.duration)) return;
+    if (isScrubbing) return;
+    const dur    = audio.duration;
+    const cur    = audio.currentTime;
+    const pct    = dur > 0 ? cur / dur : 0;
+    const pctStr = `${(pct * 100).toFixed(3)}%`;
+    scrubFill.style.width   = pctStr;
+    scrubThumb.style.left   = pctStr;
+    timeCurrent.textContent = formatTime(cur);
+    timeTotal.textContent   = formatTime(dur);
+}
+
+// ─── EQ drawing ───────────────────────────────────────────────────────────────
+function drawEQ() {
+    if (!panelOpen || activeTab !== 'analysis') return;
+
+    // if (eqCanvas.offsetWidth  !== eqCanvas.width)  eqCanvas.width  = eqCanvas.offsetWidth;
+    // if (eqCanvas.offsetHeight !== eqCanvas.height) eqCanvas.height = eqCanvas.offsetHeight;
+
+    // const w = eqCanvas.width;
+    // const h = eqCanvas.height;
+    // if (w <= 0 || h <= 0) return;
+
+    // eqCtx.fillStyle = '#020208';
+    // eqCtx.fillRect(0, 0, w, h);
+
+    // Use clientWidth/Height to ignore borders and prevent clipping
+    const w = eqCanvas.clientWidth;
+    const h = eqCanvas.clientHeight;
+    
+    if (w <= 0 || h <= 0) return;
+
+    if (eqCanvas.width !== w)  eqCanvas.width  = w;
+    if (eqCanvas.height !== h) eqCanvas.height = h;
+
+    eqCtx.fillStyle = '#020208';
+    eqCtx.fillRect(0, 0, w, h);
+
+    const activeAnalyser = liveMode ? liveAnalyser : (manager?.analyser ?? null);
+    const activeContext  = liveMode ? liveContext  : (manager?.context  ?? null);
+
+    if (!activeAnalyser || !activeContext) {
+        eqCtx.fillStyle = 'rgba(100, 140, 190, 0.22)';
+        eqCtx.font = '11px Segoe UI, system-ui, sans-serif';
+        eqCtx.textAlign = 'center';
+        eqCtx.fillText('No audio', w / 2, h / 2 + 4);
+        return;
+    }
+
+    if (!eqByteData) eqByteData = new Uint8Array(activeAnalyser.frequencyBinCount);
+    activeAnalyser.getByteFrequencyData(eqByteData);
+
+    const binCount   = eqByteData.length;
+    const sampleRate = activeContext.sampleRate;
+    const freqPerBin = sampleRate / (binCount * 2);
+
+    const minFreq  = 20;
+    const maxFreq  = 20000;
+    const LABEL_H  = 28;      // px reserved at bottom for two rows of freq labels + ticks
+    const barAreaH = h - LABEL_H;
+    const barCount = 144;
+    const barW     = w / barCount;
+    const minDb    = -100, maxDb = -30;
+
+    const freqMarkers = [
+        { f: 50,    text: '50',   row: 1 },
+        { f: 75,    text: '75',   row: 1 },
+        { f: 100,   text: '100',  row: 0 },
+        { f: 250,   text: '250',  row: 1 },
+        { f: 500,   text: '500',  row: 0 },
+        { f: 1000,  text: '1k',   row: 1 },
+        { f: 2000,  text: '2k',   row: 0 },
+        { f: 5000,  text: '5k',   row: 1 },
+        { f: 10000, text: '10k',  row: 0 },
+        { f: 20000, text: '20k',  row: 0 },
+    ];
+
+    eqCtx.font = '7px Segoe UI, system-ui, sans-serif';
+    eqCtx.textAlign = 'left';
+    for (const db of [-30, -50, -70, -90]) {
+        const frac = (db - minDb) / (maxDb - minDb);
+        const y    = barAreaH * (1 - frac);
+        eqCtx.strokeStyle = 'rgba(100, 140, 190, 0.1)';
+        eqCtx.lineWidth   = 0.5;
+        eqCtx.beginPath(); eqCtx.moveTo(0, y); eqCtx.lineTo(w, y); eqCtx.stroke();
+        eqCtx.fillStyle   = 'rgba(140, 170, 215, 0.3)';
+        eqCtx.fillText(`${db}`, 3, y - 1);
+    }
+
+    eqCtx.lineWidth = 0.5;
+    for (const { f } of freqMarkers) {
+        const t = Math.log(f / minFreq) / Math.log(maxFreq / minFreq);
+        const x = t * w;
+        eqCtx.strokeStyle = 'rgba(100, 140, 190, 0.1)';
+        eqCtx.beginPath(); eqCtx.moveTo(x, 0); eqCtx.lineTo(x, barAreaH); eqCtx.stroke();
+    }
+
+    for (let i = 0; i < barCount; i++) {
+        const t      = i / barCount;
+        const tNext  = (i + 1) / barCount;
+        const fLow   = minFreq * Math.pow(maxFreq / minFreq, t);
+        const fHigh  = minFreq * Math.pow(maxFreq / minFreq, tNext);
+        const bLow   = Math.max(0, Math.floor(fLow  / freqPerBin));
+        const bHigh  = Math.min(binCount - 1, Math.ceil(fHigh / freqPerBin));
+
+        // Use peak (max) rather than average — averaging dilutes high-frequency bars
+        // because each high-freq bar spans many more FFT bins than a low-freq bar.
+        let peak = 0;
+        for (let b = bLow; b <= bHigh; b++) { if (eqByteData[b] > peak) peak = eqByteData[b]; }
+        const barH = (peak / 255) * barAreaH;
+        const x    = i * barW;
+        const fMid = (fLow + fHigh) / 2;
+
+        let r, g, b;
+        if      (fMid <  200) { r = 0;   g = 200; b = 255; }
+        else if (fMid < 2000) { r = 180; g = 100; b = 255; }
+        else                  { r = 255; g = 200; b = 40;  }
+
+        eqCtx.fillStyle = `rgba(${r},${g},${b},0.82)`;
+        eqCtx.fillRect(x, barAreaH - barH, barW, barH);
+    }
+
+    eqCtx.strokeStyle = 'rgba(100, 140, 190, 0.2)';
+    eqCtx.lineWidth   = 0.5;
+    eqCtx.beginPath(); eqCtx.moveTo(0, barAreaH); eqCtx.lineTo(w, barAreaH); eqCtx.stroke();
+
+    eqCtx.font = '9px Segoe UI, system-ui, sans-serif';
+    for (const { f, text, row } of freqMarkers) {
+        const t = Math.log(f / minFreq) / Math.log(maxFreq / minFreq);
+        const x = t * w;
+
+        // Tick mark (taller so it connects obviously to the label)
+        eqCtx.strokeStyle = 'rgba(160, 200, 240, 0.55)';
+        eqCtx.lineWidth   = 0.75;
+        eqCtx.beginPath(); eqCtx.moveTo(x, barAreaH); eqCtx.lineTo(x, barAreaH + 5); eqCtx.stroke();
+
+        // Label
+        eqCtx.textAlign = x < 16 ? 'left' : (x > w - 16 ? 'right' : 'center');
+        eqCtx.fillStyle = 'rgba(180, 210, 250, 0.82)';
+        // row 0 → bottom row, row 1 → upper row (10px higher)
+        eqCtx.fillText(text, x, h - 4 - row * 11);
+    }
+}
+
+// ─── Detector graphs ─────────────────────────────────────────────────────────
+const GRAPH_N         = 300;   // rolling sample window (~5 s at 60 fps)
+const graphsContainer = document.getElementById('graphs-container');
+const detectorGraphs  = [];    // { det, canvas, ctx, data:{flux,maxT,avgT,triggered}, yMax, color }
+
+function initDetectorGraphs() {
+    graphsContainer.innerHTML = '';
+    detectorGraphs.length = 0;
+    const defs = [
+        ...blobs.filter(b => b.detector).map(b => ({ det: b.detector, color: b.color, label: b.name })),
+        ...(subD ? [{ det: subD, color: '#e04060', label: 'Sub' }] : []),
+    ];
+    for (const { det, color, label } of defs) {
+        const row = document.createElement('div');
+        row.className = 'det-graph-row';
+        const lbl = document.createElement('div');
+        lbl.className = 'det-graph-lbl';
+        lbl.style.color = color;
+        lbl.textContent = label;
+        const cv = document.createElement('canvas');
+        cv.className = 'det-graph-cv';
+        row.appendChild(lbl);
+        row.appendChild(cv);
+        graphsContainer.appendChild(row);
+        detectorGraphs.push({
+            det, canvas: cv, ctx: cv.getContext('2d'), color,
+            data: { flux: [], maxT: [], avgT: [], triggered: [] },
+            yMax: 0,
+        });
+    }
+}
+
+function updateDetectorGraphs() {
+    for (const g of detectorGraphs) {
+        const d = g.data;
+        d.flux.push(g.det.currentFlux);
+        d.maxT.push(g.det.maxLoudnessThresh);
+        d.avgT.push(g.det.avgPeakThresh);
+        d.triggered.push(g.det.justTriggered);
+        if (d.flux.length > GRAPH_N) {
+            d.flux.shift(); d.maxT.shift(); d.avgT.shift(); d.triggered.shift();
+        }
+    }
+}
+
+function drawDetectorGraphs() {
+    if (!panelOpen || activeTab !== 'analysis') return;
+    for (const g of detectorGraphs) {
+        const cv = g.canvas;
+        const gx = g.ctx;
+        const w  = cv.clientWidth;
+        const h  = cv.clientHeight;
+        if (w <= 0 || h <= 0) continue;
+        if (cv.width !== w)  cv.width  = w;
+        if (cv.height !== h) cv.height = h;
+
+        gx.fillStyle = '#020208';
+        gx.fillRect(0, 0, w, h);
+
+        const { flux, maxT, avgT, triggered } = g.data;
+        const n = flux.length;
+        if (n < 2) continue;
+
+        // Smooth rolling Y ceiling so the axis doesn't jump on transients
+        let dataMax = 0;
+        for (let i = 0; i < n; i++) dataMax = Math.max(dataMax, flux[i], maxT[i], avgT[i]);
+        g.yMax = Math.max(g.yMax * 0.995, dataMax * 1.15, 1e-9);
+        const yMax = g.yMax;
+
+        const xOf = i => ((i + GRAPH_N - n) / (GRAPH_N - 1)) * w;
+        const yOf = v => h - (v / yMax) * h;
+
+        // Trigger event — faint vertical tick at the moment of each trigger
+        gx.lineWidth = 1;
+        for (let i = 0; i < n; i++) {
+            if (!triggered[i]) continue;
+            gx.strokeStyle = g.color;
+            gx.globalAlpha = 0.35;
+            gx.beginPath(); gx.moveTo(xOf(i), 0); gx.lineTo(xOf(i), h); gx.stroke();
+        }
+        gx.globalAlpha = 1;
+
+        // avgPeakThresh — noise-floor component; warm orange dashed
+        _graphLine(gx, avgT, n, xOf, yOf, 'rgba(255,155,50,0.6)', 1, [3, 3]);
+
+        // maxLoudnessThresh — decaying-peak component; detector color dim
+        const [r, gc, b] = _hexRgb(g.color);
+        _graphLine(gx, maxT, n, xOf, yOf, `rgba(${r},${gc},${b},0.45)`, 1, []);
+
+        // Effective threshold = max of both — bright white dashed
+        const effT = maxT.map((v, i) => Math.max(v, avgT[i]));
+        _graphLine(gx, effT, n, xOf, yOf, 'rgba(255,255,255,0.8)', 1.5, [4, 3]);
+
+        // Flux — filled area under the signal + solid line on top
+        gx.beginPath();
+        for (let i = 0; i < n; i++) {
+            const x = xOf(i), y = yOf(flux[i]);
+            i === 0 ? gx.moveTo(x, y) : gx.lineTo(x, y);
+        }
+        gx.lineTo(xOf(n - 1), h);
+        gx.lineTo(xOf(0), h);
+        gx.closePath();
+        gx.fillStyle = `rgba(${r},${gc},${b},0.12)`;
+        gx.fill();
+        _graphLine(gx, flux, n, xOf, yOf, `rgba(${r},${gc},${b},0.9)`, 1.5, []);
+    }
+}
+
+function _graphLine(ctx, vals, n, xOf, yOf, style, width, dash) {
+    ctx.strokeStyle = style;
+    ctx.lineWidth   = width;
+    ctx.setLineDash(dash);
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+        const x = xOf(i), y = yOf(vals[i]);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+}
+
+function _hexRgb(hex) {
+    const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [0, 200, 255];
+}
+
+// ─── Beat log ─────────────────────────────────────────────────────────────────
+const LOG_MAX = 80;
+
+function logBeat(name, lastTime, color = '#aaaaaa') {
+    const now  = Date.now();
+    const d    = new Date(now);
+    const hh   = String(d.getHours()).padStart(2, '0');
+    const mm   = String(d.getMinutes()).padStart(2, '0');
+    const ss   = String(d.getSeconds()).padStart(2, '0');
+    const ms   = String(d.getMilliseconds()).padStart(3, '0');
+    const ivl  = lastTime ? ` +${now - lastTime}ms` : '';
+
+    const el = document.createElement('div');
+    el.className = 'log-entry';
+    el.innerHTML =
+        `<span class="log-time">${hh}:${mm}:${ss}.${ms}</span> ` +
+        `<span class="log-det" style="color:${color}">${name}</span>` +
+        `<span class="log-ivl">${ivl}</span>`;
+    beatLog.appendChild(el);
+
+    while (beatLog.children.length > LOG_MAX) beatLog.removeChild(beatLog.firstChild);
+    beatLog.scrollTop = beatLog.scrollHeight;
+
+    return now;
+}
+
+// ─── Slider controls ──────────────────────────────────────────────────────────
+// Frequencies group is built dynamically per-blob by buildFreqSliders().
+const SLIDER_CONFIG = [
+    { group: 'Particles', items: [
+        { label: 'Count',         min: 5,     max: 60,   step: 1,     get: () => BLOB_PARTICLE_COUNT,  set: v => { BLOB_PARTICLE_COUNT  = v; reinitBlobs(); } },
+        { label: 'Bell Radius',   min: 5,    max: 200,  step: 5,     get: () => BELL_RADIUS,          set: v => { BELL_RADIUS          = v; reinitBlobs(); } },
+        { label: 'Rest Radius',   min: 1,    max: 180,  step: 1,     get: () => BLOB_REST_RADIUS,     set: v => BLOB_REST_RADIUS     = v },
+        { label: 'Edge Dist',     min: 5,    max: 240,  step: 1,     get: () => BLOB_EDGE_DIST,       set: v => BLOB_EDGE_DIST       = v },
+        { label: 'Node Radius',   min: 0.1,   max: 12,   step: 0.1,   get: () => NODE_BASE_RADIUS,     set: v => NODE_BASE_RADIUS     = v },
+    ]},
+    { group: 'Spring', items: [
+        { label: 'Spring K',      min: 0.005, max: 0.25, step: 0.005, get: () => BLOB_SPRING_K,        set: v => BLOB_SPRING_K        = v },
+        { label: 'Damping',       min: 0.70,  max: 0.99, step: 0.01,  get: () => BLOB_DAMPING,         set: v => BLOB_DAMPING         = v },
+        { label: 'Jitter',        min: 0,     max: 0.5,  step: 0.005, get: () => BLOB_JITTER,          set: v => BLOB_JITTER          = v },
+    ]},
+    { group: 'Beat', items: [
+        { label: 'Expand Scale',   min: 0,     max: 2.0,   step: 0.05,  get: () => BLOB_EXPAND_SCALE,     set: v => BLOB_EXPAND_SCALE     = v },
+        { label: 'Expand Decay',   min: 0.70,  max: 0.99,  step: 0.01,  get: () => BLOB_EXPAND_DECAY,     set: v => BLOB_EXPAND_DECAY     = v },
+        { label: 'Spread Boost',   min: 1.0,   max: 2.5,   step: 0.05,  get: () => TENTACLE_SPREAD_BOOST, set: v => TENTACLE_SPREAD_BOOST = v },
+        { label: 'Spread Decay',   min: 0.900, max: 0.999, step: 0.005, get: () => TENTACLE_SPREAD_DECAY, set: v => TENTACLE_SPREAD_DECAY = v },
+        { label: 'Kick Scale',    min: 0,     max: 12,   step: 0.1,   get: () => BLOB_BEAT_KICK,       set: v => BLOB_BEAT_KICK       = v },
+        { label: 'Kick Accel',    min: 0.05,  max: 1.0,  step: 0.05,  get: () => KICK_ACCEL,           set: v => KICK_ACCEL           = v },
+        { label: 'Kick Decay',    min: 0.70,  max: 0.99, step: 0.01,  get: () => BLOB_BEAT_KICK_DECAY, set: v => BLOB_BEAT_KICK_DECAY = v },
+        { label: 'Max Energy',    min: 0.1,   max: 5.0,  step: 0.1,   get: () => ENERGY_MAX,           set: v => ENERGY_MAX           = v },
+        { label: 'Recharge Rate', min: 0.001, max: 0.05, step: 0.001, get: () => ENERGY_RECHARGE,      set: v => ENERGY_RECHARGE      = v },
+    ]},
+    { group: 'Threshold', items: [
+        { label: 'Idle Decay Rate', min: 0.5,   max: 6.0,  step: 0.5,    get: () => IDLE_DECAY_RATE,
+          set: v => { IDLE_DECAY_RATE = v; for (const b of blobs) if (b.detector) b.detector.idleDecayRate = v; for (const c of clams) if (c.detector) c.detector.idleDecayRate = v; if (subD) subD.idleDecayRate = v; if (_flashDetector) _flashDetector.idleDecayRate = v; if (_particleTrigDetector) _particleTrigDetector.idleDecayRate = v; } },
+        { label: 'Freq Decay Bias', min: 0,     max: 2.0,  step: 0.1,    get: () => FREQ_DECAY_BIAS,
+          set: v => { FREQ_DECAY_BIAS = v; for (const b of blobs) if (b.detector) b.detector.freqDecayBias = v; for (const c of clams) if (c.detector) c.detector.freqDecayBias = v; if (subD) subD.freqDecayBias = v; if (_flashDetector) _flashDetector.freqDecayBias = v; if (_particleTrigDetector) _particleTrigDetector.freqDecayBias = v; } },
+        { label: 'Noise Floor',     min: 0,     max: 0.0005, step: 0.00002, get: () => MIN_FLUX_FLOOR,
+          set: v => { MIN_FLUX_FLOOR = v; for (const b of blobs) if (b.detector) b.detector.minFluxFloor = v; for (const c of clams) if (c.detector) c.detector.minFluxFloor = v; if (subD) subD.minFluxFloor = v; if (_flashDetector) _flashDetector.minFluxFloor = v; if (_particleTrigDetector) _particleTrigDetector.minFluxFloor = v; } },
+    ]},
+    { group: 'Drift', items: [
+        { label: 'Drift Max',      min: 0.05,  max: 3.0,  step: 0.05,  get: () => BLOB_DRIFT_MAX,   set: v => BLOB_DRIFT_MAX   = v },
+        { label: 'Drift Accel',    min: 0.001, max: 0.05, step: 0.001, get: () => BLOB_DRIFT_ACCEL, set: v => BLOB_DRIFT_ACCEL = v },
+        { label: 'Edge Margin',    min: 0,     max: 300,  step: 5,     get: () => BLOB_MARGIN,      set: v => BLOB_MARGIN      = v },
+        { label: 'Top Clear',      min: 0,     max: 200,  step: 5,     get: () => TOP_CLEAR,        set: v => TOP_CLEAR        = v },
+        { label: 'Drag Momentum',  min: 0,     max: 6.0,  step: 0.05,  get: () => DRAG_MOMENTUM,    set: v => DRAG_MOMENTUM    = v },
+    ]},
+    { group: 'Effects', items: [
+        { label: 'Wave Speed',    min: 0.5,   max: 12,   step: 0.5,   get: () => SHOCKWAVE_SPEED,      set: v => SHOCKWAVE_SPEED      = v },
+        { label: 'Wave Max R',    min: 50,    max: 600,  step: 10,    get: () => SHOCKWAVE_MAX_R,      set: v => SHOCKWAVE_MAX_R      = v },
+        { label: 'Poly Scale',    min: 50,    max: 700,  step: 10,    get: () => POLYGON_MAX_SCALE,    set: v => POLYGON_MAX_SCALE    = v },
+        { label: 'Poly Rate',     min: 0.5,   max: 20,   step: 0.5,   get: () => POLYGON_EXPAND_RATE,  set: v => POLYGON_EXPAND_RATE  = v },
+    ]},
+    { group: 'Inflate', items: [
+        { label: 'Enabled',  type: 'toggle',                          get: () => INFLATE_ENABLED, set: v => INFLATE_ENABLED = v },
+        { label: 'Boost',    min: 0.001, max: 0.2,  step: 0.002,       get: () => INFLATE_BOOST,   set: v => INFLATE_BOOST   = v },
+        { label: 'Decay',    min: 0.95, max: 0.9995,step: 0.0005,    get: () => INFLATE_DECAY,   set: v => INFLATE_DECAY   = v },
+        { label: 'Max',      min: 1.0,  max: 3.0,  step: 0.05,       get: () => INFLATE_MAX,     set: v => INFLATE_MAX     = v },
+    ]},
+    { group: 'Clam', items: [
+        { label: 'Shell Width',   min: 20,   max: 300,  step: 1,     get: () => CLAM_SHELL_W,     set: v => { CLAM_SHELL_W    = v; reinitClams(); } },
+        { label: 'Upper Height',  min: 10,   max: 200,  step: 1,     get: () => CLAM_SHELL_H,     set: v => { CLAM_SHELL_H    = v; reinitClams(); } },
+        { label: 'Lower Depth',   min: 5,    max: 150,   step: 1,     get: () => CLAM_SHELL_BLOW,  set: v => { CLAM_SHELL_BLOW = v; reinitClams(); } },
+        { label: 'Max Lip Gap',   min: 5,    max: 100,   step: 1,     get: () => CLAM_LIP_OPEN,    set: v => CLAM_LIP_OPEN    = v },
+        { label: 'Snap Force',    min: 0.5,  max: 12,   step: 0.5,   get: () => CLAM_SNAP_FORCE,  set: v => CLAM_SNAP_FORCE  = v },
+        { label: 'Water Gravity', min: 0.01, max: 0.3,  step: 0.005, get: () => CLAM_GRAVITY,     set: v => CLAM_GRAVITY     = v },
+        { label: 'Water Drag',    min: 0.80, max: 0.999,step: 0.002, get: () => CLAM_WATER_DRAG,  set: v => CLAM_WATER_DRAG  = v },
+        { label: 'Spin Max',      min: 0,    max: 0.15, step: 0.005, get: () => CLAM_SPIN_MAX,    set: v => CLAM_SPIN_MAX    = v },
+        { label: 'Snap Spring',   min: 0.02, max: 0.60, step: 0.01,  get: () => CLAM_SNAP_SPRING, set: v => CLAM_SNAP_SPRING = v },
+        { label: 'Edge Dist',     min: 5,   max: 200,  step: 5,     get: () => CLAM_EDGE_DIST,   set: v => CLAM_EDGE_DIST   = v },
+    ]},
+    { group: 'Spotlight', items: [
+        { label: 'Enabled',      type: 'toggle',                           get: () => SPOTLIGHT_ENABLED,      set: v => SPOTLIGHT_ENABLED      = v },
+        { label: 'Solo Time (s)', min: 0.5,  max: 15,   step: 0.5,        get: () => SOLO_THRESHOLD_MS / 1000, set: v => SOLO_THRESHOLD_MS = v * 1000 },
+        { label: 'Max Opacity',  min: 0.01, max: 0.50,  step: 0.01,       get: () => SPOTLIGHT_MAX_ALPHA,    set: v => SPOTLIGHT_MAX_ALPHA    = v },
+        { label: 'Radius',       min: 1.0,  max: 8.0,   step: 0.25,       get: () => SPOTLIGHT_RADIUS_MULT,  set: v => SPOTLIGHT_RADIUS_MULT  = v },
+        { label: 'Fade Speed',   min: 0.005, max: 0.10, step: 0.005,      get: () => SPOTLIGHT_FADE_IN,      set: v => { SPOTLIGHT_FADE_IN = v; SPOTLIGHT_FADE_OUT = v * 0.5; } },
+    ]},
+    { group: 'Duo Link', items: [
+        { label: 'Enabled',        type: 'toggle',                         get: () => DUO_LINK_ENABLED,           set: v => DUO_LINK_ENABLED           = v },
+        { label: 'Sync Window (s)', min: 1,   max: 15,   step: 0.5,       get: () => DUO_SYNC_WINDOW,            set: v => DUO_SYNC_WINDOW            = v },
+        { label: 'Sync Tolerance (ms)', min: 25, max: 1000, step: 25,     get: () => DUO_SYNC_TOLERANCE,         set: v => DUO_SYNC_TOLERANCE         = v },
+        { label: 'Min Matches',     min: 1,   max: 20,   step: 1,         get: () => DUO_SYNC_MIN_MATCHES,       set: v => DUO_SYNC_MIN_MATCHES       = v },
+        { label: 'Appear Delay (s)', min: 0.5, max: 15,  step: 0.5,       get: () => DUO_THRESHOLD_MS / 1000,    set: v => DUO_THRESHOLD_MS = v * 1000 },
+        { label: 'Max Opacity',     min: 0.01, max: 0.50, step: 0.01,     get: () => DUO_LINK_MAX_ALPHA,         set: v => DUO_LINK_MAX_ALPHA         = v },
+        { label: 'Edge Dist',       min: 5,   max: 300,  step: 5,        get: () => DUO_LINK_EDGE_DIST,         set: v => DUO_LINK_EDGE_DIST         = v },
+        { label: 'Particles',       min: 10,   max: 80,   step: 2,        get: () => DUO_LINK_PARTICLE_COUNT,    set: v => { DUO_LINK_PARTICLE_COUNT  = v; if (_duoPair) _duoPair.particles = _createDuoParticles(_duoPair.blobA, _duoPair.blobB); } },
+        { label: 'Spread Radius',   min: 0.2,  max: 4.0,  step: 0.1,     get: () => DUO_LINK_SPREAD,            set: v => { DUO_LINK_SPREAD          = v; if (_duoPair) _duoPair.particles = _createDuoParticles(_duoPair.blobA, _duoPair.blobB); } },
+        { label: 'Fade Speed',      min: 0.005, max: 0.10, step: 0.005,   get: () => DUO_FADE_IN,                set: v => { DUO_FADE_IN = v; DUO_FADE_OUT = v * 0.5; } },
+    ]},
+    { group: 'Underwater', items: [
+        { label: 'Caustics',       type: 'toggle',                           get: () => UW_CAUSTICS_ENABLED,  set: v => UW_CAUSTICS_ENABLED  = v },
+        { label: 'Caustic Alpha',  min: 0,    max: 0.12,  step: 0.002,      get: () => UW_CAUSTICS_ALPHA,    set: v => UW_CAUSTICS_ALPHA    = v },
+        { label: 'Caustic Speed',  min: 0,    max: 0.001, step: 0.00002,    get: () => UW_CAUSTICS_SPEED,    set: v => UW_CAUSTICS_SPEED    = v },
+        { label: 'Color A', type: 'color',
+          get: () => rgbToHex(UW_BLOB_R1, UW_BLOB_G1, UW_BLOB_B1),
+          set: hex => { const [r,g,b] = hexToRgb(hex); UW_BLOB_R1=r; UW_BLOB_G1=g; UW_BLOB_B1=b; } },
+        { label: 'Color B', type: 'color',
+          get: () => rgbToHex(UW_BLOB_R2, UW_BLOB_G2, UW_BLOB_B2),
+          set: hex => { const [r,g,b] = hexToRgb(hex); UW_BLOB_R2=r; UW_BLOB_G2=g; UW_BLOB_B2=b; } },
+        { label: 'Particle Color', type: 'color',
+          get: () => rgbToHex(UW_PARTICLES_R, UW_PARTICLES_G, UW_PARTICLES_B),
+          set: hex => { const [r,g,b] = hexToRgb(hex); UW_PARTICLES_R=r; UW_PARTICLES_G=g; UW_PARTICLES_B=b; } },
+        { label: 'Particles',      type: 'toggle',                           get: () => UW_PARTICLES_ENABLED, set: v => UW_PARTICLES_ENABLED = v },
+        { label: 'Particle Alpha', min: 0,    max: 1.0,   step: 0.02,       get: () => UW_PARTICLES_ALPHA,   set: v => UW_PARTICLES_ALPHA   = v },
+        { label: 'Current Speed',  min: 0,    max: 1.5,   step: 0.02,       get: () => UW_PARTICLES_SPEED,   set: v => UW_PARTICLES_SPEED   = v },
+    ]},
+    { group: 'Particle Current', items: [
+        { label: 'Beat Trigger',   type: 'toggle', get: () => PARTICLE_TRIGGER_ENABLED, set: v => PARTICLE_TRIGGER_ENABLED = v },
+        { label: 'Hz',             min: 20,   max: 20000, step: 1,    get: () => PARTICLE_TRIGGER_HZ,
+          set: v => { PARTICLE_TRIGGER_HZ = v; if (_particleTrigDetector) { _particleTrigDetector.targetHz = v; _particleTrigDetector.reset(); } } },
+        { label: 'Boost',          min: 0,    max: 8,     step: 0.05, get: () => PARTICLE_TRIGGER_BOOST,    set: v => PARTICLE_TRIGGER_BOOST    = v },
+        { label: 'Slope',          min: 0.1,  max: 4.0,   step: 0.1,  get: () => PARTICLE_TRIGGER_SLOPE,    set: v => PARTICLE_TRIGGER_SLOPE    = v },
+        { label: 'Fade In (ms)',   min: 10,   max: 2000,  step: 10,   get: () => PARTICLE_TRIGGER_FADE_IN,  set: v => PARTICLE_TRIGGER_FADE_IN  = v },
+        { label: 'Fade Out (ms)',  min: 10,   max: 5000,  step: 10,   get: () => PARTICLE_TRIGGER_FADE_OUT, set: v => PARTICLE_TRIGGER_FADE_OUT = v },
+        { label: 'Energy Response',type: 'toggle', get: () => PARTICLE_ENERGY_ENABLED,   set: v => PARTICLE_ENERGY_ENABLED   = v },
+        { label: 'Energy Min',     min: 0,    max: 5,     step: 0.05, get: () => PARTICLE_ENERGY_MIN,       set: v => PARTICLE_ENERGY_MIN       = v },
+        { label: 'Energy Max',     min: 0,    max: 10,    step: 0.05, get: () => PARTICLE_ENERGY_MAX,       set: v => PARTICLE_ENERGY_MAX       = v },
+    ]},
+    { group: 'Blob Flash', items: [
+        { label: 'Enabled',       type: 'toggle', get: () => BLOB_FLASH_ENABLED, set: v => BLOB_FLASH_ENABLED = v },
+        { label: 'Hz',            min: 20, max: 20000, step: 1,   get: () => BLOB_FLASH_HZ,
+          set: v => { BLOB_FLASH_HZ = v; if (_flashDetector) { _flashDetector.targetHz = v; _flashDetector.reset(); } } },
+        { label: 'Color',         type: 'color',
+          get: () => rgbToHex(BLOB_FLASH_R, BLOB_FLASH_G, BLOB_FLASH_B),
+          set: hex => { const [r,g,b] = hexToRgb(hex); BLOB_FLASH_R=r; BLOB_FLASH_G=g; BLOB_FLASH_B=b; } },
+        { label: 'Random Color',  type: 'toggle', get: () => BLOB_FLASH_RANDOM, set: v => BLOB_FLASH_RANDOM = v },
+        { label: 'Slope',         min: 0.1, max: 4.0,   step: 0.1,  get: () => BLOB_FLASH_SLOPE,    set: v => BLOB_FLASH_SLOPE    = v },
+        { label: 'Fade In (ms)',  min: 10,  max: 2000,  step: 10,   get: () => BLOB_FLASH_FADE_IN,  set: v => BLOB_FLASH_FADE_IN  = v },
+        { label: 'Fade Out (ms)', min: 10,  max: 5000,  step: 10,   get: () => BLOB_FLASH_FADE_OUT, set: v => BLOB_FLASH_FADE_OUT = v },
+        { label: 'Affect All',    type: 'toggle', get: () => BLOB_FLASH_ALL,     set: v => BLOB_FLASH_ALL     = v },
+    ]},
+    { group: 'Dither', items: [
+        { label: 'Enabled',        type: 'toggle', get: () => DITHER_ENABLED,      set: v => DITHER_ENABLED      = v },
+        { label: 'Pixel Size',     min: 2,  max: 8,   step: 1,    get: () => DITHER_PIXEL_SIZE,  set: v => { DITHER_PIXEL_SIZE = v; _ditherCanvas = null; } },
+        { label: 'Color Levels',   min: 2,  max: 64,  step: 1,    get: () => DITHER_LEVELS,      set: v => { DITHER_LEVELS      = v; _ditherLUT = null; } },
+        { label: 'Opacity',        min: 0.1,max: 1.0, step: 0.01, get: () => DITHER_OPACITY,     set: v => DITHER_OPACITY     = v },
+        { label: 'Phosphor Tint',  type: 'toggle', get: () => DITHER_TINT_ENABLED, set: v => { DITHER_TINT_ENABLED = v; _ditherLUT = null; } },
+        { label: 'Tint Color',     type: 'color',
+          get: () => rgbToHex(DITHER_TINT_R, DITHER_TINT_G, DITHER_TINT_B),
+          set: hex => { const [r,g,b] = hexToRgb(hex); DITHER_TINT_R=r; DITHER_TINT_G=g; DITHER_TINT_B=b; _ditherLUT = null; } },
+        { label: 'Tint Strength',  min: 0,  max: 1,   step: 0.01, get: () => DITHER_TINT_STR,    set: v => { DITHER_TINT_STR    = v; _ditherLUT = null; } },
+        { label: 'Scanlines',      type: 'toggle', get: () => DITHER_SCAN_ENABLED, set: v => DITHER_SCAN_ENABLED = v },
+        { label: 'Scanline Alpha', min: 0,  max: 0.8, step: 0.01, get: () => DITHER_SCAN_ALPHA,  set: v => DITHER_SCAN_ALPHA  = v },
+        { label: 'Scanline Gap',   min: 2,  max: 8,   step: 1,    get: () => DITHER_SCAN_GAP,    set: v => DITHER_SCAN_GAP    = v },
+    ]},
+    { group: 'Background', items: [
+        { label: 'Energy Glow',   min: 0,     max: 0.5,  step: 0.01,  get: () => BG_ENERGY_MAX_ALPHA,  set: v => BG_ENERGY_MAX_ALPHA  = v },
+        { label: 'Band Height',   min: 0.05,  max: 1.0,  step: 0.01,  get: () => SUB_BAND_HEIGHT,      set: v => SUB_BAND_HEIGHT      = v },
+        { label: 'Max Opacity',   min: 0.0,   max: 1.0,  step: 0.01,  get: () => SUB_MAX_ALPHA,        set: v => SUB_MAX_ALPHA        = v },
+        { label: 'Band Color', type: 'color',
+          get: () => rgbToHex(SUB_R, SUB_G, SUB_B),
+          set: hex => { const [r,g,b] = hexToRgb(hex); SUB_R=r; SUB_G=g; SUB_B=b; } },
+        { label: 'BG Color', type: 'color',
+          get: () => rgbToHex(BG_R, BG_G, BG_B),
+          set: hex => { const [r,g,b] = hexToRgb(hex); BG_R=r; BG_G=g; BG_B=b; } },
+        { label: 'Trail',         min: 0.05,  max: 1.0,  step: 0.01,  get: () => BG_TRAIL_ALPHA,       set: v => BG_TRAIL_ALPHA       = v },
+    ]},
+];
+
+function fmtSliderVal(v, step) {
+    const dec = String(step).includes('.') ? String(step).split('.')[1].length : 0;
+    return v.toFixed(dec);
+}
+function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(v => Math.round(v).toString(16).padStart(2, '0')).join('');
+}
+function hexToRgb(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+function buildColorShortcuts() {
+    const container = document.getElementById('sliders-scroll');
+    if (!container) return;
+    let grp = document.getElementById('color-shortcuts-group');
+    if (!grp) {
+        grp = document.createElement('div');
+        grp.id = 'color-shortcuts-group';
+        grp.className = 'ctrl-group';
+        container.insertBefore(grp, container.firstChild);
+    }
+    grp.innerHTML = '';
+    const groupLabel = document.createElement('div');
+    groupLabel.className = 'ctrl-group-label';
+    groupLabel.textContent = 'Colors';
+    grp.appendChild(groupLabel);
+    const grid = document.createElement('div');
+    grid.className = 'ctrl-color-grid';
+    grp.appendChild(grid);
+
+    function addSwatch(label, getHex, setHex) {
+        const cell = document.createElement('div');
+        cell.className = 'ctrl-color-cell';
+        const lbl = document.createElement('span');
+        lbl.className = 'ctrl-color-cell-lbl';
+        lbl.textContent = label;
+        lbl.title = label;
+        const inp = document.createElement('input');
+        inp.type = 'color';
+        inp.className = 'ctrl-color';
+        inp.value = getHex();
+        inp.addEventListener('input', () => setHex(inp.value));
+        cell.appendChild(lbl);
+        cell.appendChild(inp);
+        grid.appendChild(cell);
+    }
+
+    // Static environment colors
+    addSwatch('UW A',
+        () => rgbToHex(UW_BLOB_R1, UW_BLOB_G1, UW_BLOB_B1),
+        hex => { const [r,g,b] = hexToRgb(hex); UW_BLOB_R1=r; UW_BLOB_G1=g; UW_BLOB_B1=b; });
+    addSwatch('UW B',
+        () => rgbToHex(UW_BLOB_R2, UW_BLOB_G2, UW_BLOB_B2),
+        hex => { const [r,g,b] = hexToRgb(hex); UW_BLOB_R2=r; UW_BLOB_G2=g; UW_BLOB_B2=b; });
+    addSwatch('Particle',
+        () => rgbToHex(UW_PARTICLES_R, UW_PARTICLES_G, UW_PARTICLES_B),
+        hex => { const [r,g,b] = hexToRgb(hex); UW_PARTICLES_R=r; UW_PARTICLES_G=g; UW_PARTICLES_B=b; });
+    addSwatch('Flash',
+        () => rgbToHex(BLOB_FLASH_R, BLOB_FLASH_G, BLOB_FLASH_B),
+        hex => { const [r,g,b] = hexToRgb(hex); BLOB_FLASH_R=r; BLOB_FLASH_G=g; BLOB_FLASH_B=b; });
+    addSwatch('Band',
+        () => rgbToHex(SUB_R, SUB_G, SUB_B),
+        hex => { const [r,g,b] = hexToRgb(hex); SUB_R=r; SUB_G=g; SUB_B=b; });
+    addSwatch('BG',
+        () => rgbToHex(BG_R, BG_G, BG_B),
+        hex => { const [r,g,b] = hexToRgb(hex); BG_R=r; BG_G=g; BG_B=b; });
+}
+
+// Builds (or rebuilds) the Frequencies group at the top of the sliders panel,
+// with one Hz slider per blob using that blob's name and color as the label.
+function buildFreqSliders() {
+    buildColorShortcuts();
+    const container = document.getElementById('sliders-scroll');
+    if (!container) return;
+    let freqGroup = document.getElementById('freq-group');
+    if (!freqGroup) {
+        freqGroup = document.createElement('div');
+        freqGroup.id = 'freq-group';
+        freqGroup.className = 'ctrl-group';
+        const _colorGrp = document.getElementById('color-shortcuts-group');
+        container.insertBefore(freqGroup, _colorGrp ? _colorGrp.nextSibling : container.firstChild);
+    }
+    freqGroup.innerHTML = '';
+    const groupLabel = document.createElement('div');
+    groupLabel.className = 'ctrl-group-label';
+    groupLabel.textContent = 'Frequencies';
+    freqGroup.appendChild(groupLabel);
+
+    for (let bi = 0; bi < blobs.length; bi++) {
+        const blob = blobs[bi];
+        const row  = document.createElement('div');
+        row.className = 'ctrl-row';
+
+        const lbl = document.createElement('span');
+        lbl.className   = 'ctrl-label';
+        lbl.textContent = blob.name + ' Hz';
+        lbl.title       = blob.name + ' Hz';
+        // Use body color for label; fall back to effectColor if body is near-black
+        const hx = blob.color.replace('#', '');
+        const lr = parseInt(hx.slice(0,2), 16), lg = parseInt(hx.slice(2,4), 16), lb = parseInt(hx.slice(4,6), 16);
+        lbl.style.color = (0.299*lr + 0.587*lg + 0.114*lb) < 30 ? (blob.effectColor || '#aaaaaa') : blob.color;
+        row.appendChild(lbl);
+
+        const slider = document.createElement('input');
+        slider.type      = 'range';
+        slider.className = 'ctrl-slider';
+        slider.min = 20; slider.max = 20000; slider.step = 1;
+        slider.value = blob.detectorHz;
+
+        const val = document.createElement('input');
+        val.type      = 'text';
+        val.className = 'ctrl-val';
+        val.value     = Math.round(blob.detectorHz);
+
+        // Capture bi by value so the closure refers to the right blob
+        slider.addEventListener('input', ((_bi) => () => {
+            const v = parseFloat(slider.value);
+            blobs[_bi].detectorHz = v;
+            if (blobs[_bi].detector) { blobs[_bi].detector.targetHz = v; blobs[_bi].detector.reset(); }
+            val.value = Math.round(v);
+        })(bi));
+
+        const _commitHz = ((_bi) => () => {
+            const raw = parseFloat(val.value);
+            if (isNaN(raw)) { val.value = Math.round(blobs[_bi].detectorHz); return; }
+            const v = Math.min(20000, Math.max(20, Math.round(raw)));
+            slider.value = v;
+            blobs[_bi].detectorHz = v;
+            if (blobs[_bi].detector) { blobs[_bi].detector.targetHz = v; blobs[_bi].detector.reset(); }
+            val.value = v;
+        })(bi);
+        val.addEventListener('blur', _commitHz);
+        val.addEventListener('keydown', e => { if (e.key === 'Enter') { _commitHz(); val.blur(); } });
+
+        row.appendChild(slider);
+        row.appendChild(val);
+        freqGroup.appendChild(row);
+    }
+
+    for (let ci = 0; ci < clams.length; ci++) {
+        const clam = clams[ci];
+        const row  = document.createElement('div');
+        row.className = 'ctrl-row';
+
+        const lbl = document.createElement('span');
+        lbl.className   = 'ctrl-label';
+        lbl.textContent = clam.name + ' Hz';
+        lbl.title       = clam.name + ' Hz';
+        const [lr, lg, lb] = _hexRgb(clam.color);
+        lbl.style.color = (0.299*lr + 0.587*lg + 0.114*lb) < 30 ? (clam.effectColor || '#aaaaaa') : clam.color;
+        row.appendChild(lbl);
+
+        const slider = document.createElement('input');
+        slider.type      = 'range';
+        slider.className = 'ctrl-slider';
+        slider.min = 20; slider.max = 20000; slider.step = 1;
+        slider.value = clam.detectorHz;
+
+        const val = document.createElement('input');
+        val.type      = 'text';
+        val.className = 'ctrl-val';
+        val.value     = Math.round(clam.detectorHz);
+
+        slider.addEventListener('input', ((_ci) => () => {
+            const v = parseFloat(slider.value);
+            clams[_ci].detectorHz = v;
+            if (clams[_ci].detector) { clams[_ci].detector.targetHz = v; clams[_ci].detector.reset(); }
+            val.value = Math.round(v);
+        })(ci));
+
+        const _commitClamHz = ((_ci) => () => {
+            const raw = parseFloat(val.value);
+            if (isNaN(raw)) { val.value = Math.round(clams[_ci].detectorHz); return; }
+            const v = Math.min(20000, Math.max(20, Math.round(raw)));
+            slider.value = v;
+            clams[_ci].detectorHz = v;
+            if (clams[_ci].detector) { clams[_ci].detector.targetHz = v; clams[_ci].detector.reset(); }
+            val.value = v;
+        })(ci);
+        val.addEventListener('blur', _commitClamHz);
+        val.addEventListener('keydown', e => { if (e.key === 'Enter') { _commitClamHz(); val.blur(); } });
+
+        row.appendChild(slider);
+        row.appendChild(val);
+        freqGroup.appendChild(row);
+    }
+}
+
+function buildSliders() {
+    const container = document.getElementById('sliders-scroll');
+    if (!container) return;
+    buildFreqSliders();
+
+    for (const group of SLIDER_CONFIG) {
+        const groupEl = document.createElement('div');
+        groupEl.className = 'ctrl-group';
+
+        const groupLabel = document.createElement('div');
+        groupLabel.className = 'ctrl-group-label';
+        groupLabel.textContent = group.group;
+        groupEl.appendChild(groupLabel);
+
+        for (const item of group.items) {
+            const row = document.createElement('div');
+            row.className = 'ctrl-row';
+
+            const lbl = document.createElement('span');
+            lbl.className   = 'ctrl-label';
+            lbl.textContent = item.label;
+            lbl.title       = item.label;
+            row.appendChild(lbl);
+
+            if (item.type === 'toggle') {
+                // Boolean toggle switch
+                const toggleLabel = document.createElement('label');
+                toggleLabel.className = 'ctrl-toggle';
+                const chk   = document.createElement('input');
+                chk.type    = 'checkbox';
+                chk.checked = item.get();
+                const track = document.createElement('span');
+                track.className = 'ctrl-toggle-track';
+                toggleLabel.appendChild(chk);
+                toggleLabel.appendChild(track);
+                chk.addEventListener('change', () => item.set(chk.checked));
+                row.appendChild(toggleLabel);
+            } else if (item.type === 'color') {
+                // Color picker — replaces R/G/B slider triplets
+                const input = document.createElement('input');
+                input.type      = 'color';
+                input.className = 'ctrl-color';
+                input.value     = item.get();
+                input.addEventListener('input', () => item.set(input.value));
+                row.appendChild(input);
+            } else {
+                // Standard range slider + value readout
+                const slider = document.createElement('input');
+                slider.type      = 'range';
+                slider.className = 'ctrl-slider';
+                slider.min       = item.min;
+                slider.max       = item.max;
+                slider.step      = item.step;
+                slider.value     = item.get();
+
+                const val = document.createElement('input');
+                val.type      = 'text';
+                val.className = 'ctrl-val';
+                val.value     = fmtSliderVal(item.get(), item.step);
+
+                slider.addEventListener('input', () => {
+                    const v = parseFloat(slider.value);
+                    item.set(v);
+                    val.value = fmtSliderVal(v, item.step);
+                });
+
+                const _commitVal = () => {
+                    const raw = parseFloat(val.value);
+                    if (isNaN(raw)) { val.value = fmtSliderVal(parseFloat(slider.value), item.step); return; }
+                    const clamped = Math.min(item.max, Math.max(item.min, raw));
+                    const dec = String(item.step).includes('.') ? String(item.step).split('.')[1].length : 0;
+                    const snapped = parseFloat((Math.round(clamped / item.step) * item.step).toFixed(dec));
+                    slider.value = snapped;
+                    item.set(snapped);
+                    val.value = fmtSliderVal(snapped, item.step);
+                };
+                val.addEventListener('blur', _commitVal);
+                val.addEventListener('keydown', e => { if (e.key === 'Enter') { _commitVal(); val.blur(); } });
+
+                row.appendChild(slider);
+                row.appendChild(val);
+            }
+
+            groupEl.appendChild(row);
+        }
+
+        container.appendChild(groupEl);
+    }
+}
+
+// ─── Perceived energy ─────────────────────────────────────────────────────────
+// ─── Underwater effects ────────────────────────────────────────────────────────
+// Two independent layers:
+//   Caustics  — large soft light blobs moving on slow Lissajous paths, drawn
+//               with 'screen' composite so overlapping areas brighten naturally.
+//   Particles — tiny motes drifting with a slowly rotating global current,
+//               each with slight individual wobble.
+
+function initUnderwater() {
+    _uwCaustics = [];
+    for (let i = 0; i < 10; i++) {
+        _uwCaustics.push({
+            cx: rand(canvas.width  * 0.05, canvas.width  * 0.95),
+            cy: rand(canvas.height * 0.05, canvas.height * 0.95),
+            ax: rand(50, canvas.width  * 0.22),  // Lissajous x amplitude
+            ay: rand(40, canvas.height * 0.20),  // Lissajous y amplitude
+            wx: rand(0.55, 1.45),                // x angular frequency
+            wy: rand(0.45, 1.25),                // y angular frequency
+            px: rand(0, Math.PI * 2),            // x phase offset
+            py: rand(0, Math.PI * 2),            // y phase offset
+            r:  rand(90, 210),                   // base radius (px)
+            rp: rand(0, Math.PI * 2),            // breathing phase
+            rw: rand(0.35, 1.1),                 // breathing frequency
+            shape:    Math.floor(rand(0, 3)),    // 0=sphere 1=wide dome 2=tall narrow
+            colorT:   rand(0, 1),                // palette interpolation 0=color A 1=color B
+            angle:    rand(0, Math.PI * 2),      // current orientation
+            angleVel: rand(-0.0003, 0.0003),     // slow rotation speed (rad/frame)
+            flashT:       0,                     // 0=off, 0→1→0 during flash cycle
+            flashPhase:   'idle',                // 'idle' | 'in' | 'out'
+            flashElapsed: 0,                     // ms elapsed in current flash phase
+            flashR: 0, flashG: 0, flashB: 0,     // target flash color (set on trigger)
+        });
+    }
+    _uwParticles = [];
+    for (let i = 0; i < 80; i++) {
+        _uwParticles.push({
+            x:     rand(0, canvas.width),
+            y:     rand(0, canvas.height),
+            r:     rand(0.5, 2.0),
+            alpha: rand(0.55, 1.0),   // per-particle opacity factor (scaled by UW_PARTICLES_ALPHA)
+            dvx:   rand(-0.08, 0.08), // individual x drift offset
+            dvy:   rand(-0.06, 0.06), // individual y drift offset
+            phase: rand(0, Math.PI * 2),
+        });
+    }
+}
+
+function updateUnderwater(dt) {
+    const dtF = dt / 16.7;  // normalize to 60 fps
+    _uwT          += UW_CAUSTICS_SPEED * dt;
+    _uwCurrentAngle += 0.00018 * dtF;  // very slow current direction rotation
+
+    for (const c of _uwCaustics) {
+        c.angle += c.angleVel * dtF;
+        if (c.flashPhase === 'in') {
+            c.flashElapsed += dt;
+            c.flashT = Math.min(1, c.flashElapsed / BLOB_FLASH_FADE_IN);
+            if (c.flashT >= 1) { c.flashPhase = 'out'; c.flashElapsed = 0; }
+        } else if (c.flashPhase === 'out') {
+            c.flashElapsed += dt;
+            c.flashT = 1 - Math.min(1, c.flashElapsed / BLOB_FLASH_FADE_OUT);
+            if (c.flashT <= 0) { c.flashT = 0; c.flashPhase = 'idle'; }
+        }
+    }
+
+    // Particle current trigger phase advance
+    if (_particleTrigPhase === 'in') {
+        _particleTrigElapsed += dt;
+        _particleTrigT = Math.min(1, _particleTrigElapsed / PARTICLE_TRIGGER_FADE_IN);
+        if (_particleTrigT >= 1) { _particleTrigPhase = 'out'; _particleTrigElapsed = 0; }
+    } else if (_particleTrigPhase === 'out') {
+        _particleTrigElapsed += dt;
+        _particleTrigT = 1 - Math.min(1, _particleTrigElapsed / PARTICLE_TRIGGER_FADE_OUT);
+        if (_particleTrigT <= 0) { _particleTrigT = 0; _particleTrigPhase = 'idle'; }
+    }
+
+    if (UW_PARTICLES_ENABLED) {
+        let _effSpeed = UW_PARTICLES_SPEED;
+        if (PARTICLE_TRIGGER_ENABLED && _particleTrigT > 0)
+            _effSpeed += PARTICLE_TRIGGER_BOOST * Math.pow(_particleTrigT, PARTICLE_TRIGGER_SLOPE);
+        if (PARTICLE_ENERGY_ENABLED)
+            _effSpeed += PARTICLE_ENERGY_MIN + bgEnergySmooth * (PARTICLE_ENERGY_MAX - PARTICLE_ENERGY_MIN);
+        const cx = Math.cos(_uwCurrentAngle) * _effSpeed * dtF;
+        const cy = Math.sin(_uwCurrentAngle) * _effSpeed * dtF;
+        const W = canvas.width, H = canvas.height;
+        for (const p of _uwParticles) {
+            p.phase += 0.008 * dtF;
+            p.x += cx + p.dvx * dtF;
+            p.y += cy + p.dvy * dtF + Math.sin(p.phase) * 0.05 * dtF;
+            if (p.x < -4)    p.x = W + 4;
+            else if (p.x > W + 4) p.x = -4;
+            if (p.y < -4)    p.y = H + 4;
+            else if (p.y > H + 4) p.y = -4;
+        }
+    }
+}
+
+function _flashHzParams(hz) {
+    if (hz < 200)       return { rangeHz: 15,  octaves: 1, duration: 10 };
+    else if (hz < 1000) return { rangeHz: 60,  octaves: 2, duration: 8  };
+    else if (hz < 5000) return { rangeHz: 200, octaves: 2, duration: 6  };
+    else                return { rangeHz: 500, octaves: 2, duration: 6  };
+}
+
+function triggerBlobFlash() {
+    if (_uwCaustics.length === 0) return;
+    if (BLOB_FLASH_ALL) {
+        for (const c of _uwCaustics) {
+            c.flashR = BLOB_FLASH_RANDOM ? (Math.random() * 255) | 0 : BLOB_FLASH_R;
+            c.flashG = BLOB_FLASH_RANDOM ? (Math.random() * 255) | 0 : BLOB_FLASH_G;
+            c.flashB = BLOB_FLASH_RANDOM ? (Math.random() * 255) | 0 : BLOB_FLASH_B;
+            c.flashT = 0; c.flashPhase = 'in'; c.flashElapsed = 0;
+        }
+    } else {
+        const c = _uwCaustics[Math.floor(Math.random() * _uwCaustics.length)];
+        c.flashR = BLOB_FLASH_RANDOM ? (Math.random() * 255) | 0 : BLOB_FLASH_R;
+        c.flashG = BLOB_FLASH_RANDOM ? (Math.random() * 255) | 0 : BLOB_FLASH_G;
+        c.flashB = BLOB_FLASH_RANDOM ? (Math.random() * 255) | 0 : BLOB_FLASH_B;
+        c.flashT = 0; c.flashPhase = 'in'; c.flashElapsed = 0;
+    }
+}
+
+function triggerParticleCurrent() {
+    _particleTrigT = 0;
+    _particleTrigPhase = 'in';
+    _particleTrigElapsed = 0;
+}
+
+function drawUnderwater() {
+    if (UW_CAUSTICS_ENABLED && UW_CAUSTICS_ALPHA > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'screen';
+        for (const c of _uwCaustics) {
+            const x = c.cx + c.ax * Math.sin(c.wx * _uwT + c.px);
+            const y = c.cy + c.ay * Math.cos(c.wy * _uwT + c.py);
+            const r = c.r  * (1 + 0.15 * Math.sin(c.rw * _uwT + c.rp));
+            const cr = Math.round(UW_BLOB_R1 + c.colorT * (UW_BLOB_R2 - UW_BLOB_R1));
+            const cg = Math.round(UW_BLOB_G1 + c.colorT * (UW_BLOB_G2 - UW_BLOB_G1));
+            const cb = Math.round(UW_BLOB_B1 + c.colorT * (UW_BLOB_B2 - UW_BLOB_B1));
+            const ft = c.flashT > 0 ? Math.pow(c.flashT, BLOB_FLASH_SLOPE) : 0;
+            const dr = ft > 0 ? Math.round(cr + ft * (c.flashR - cr)) : cr;
+            const dg = ft > 0 ? Math.round(cg + ft * (c.flashG - cg)) : cg;
+            const db = ft > 0 ? Math.round(cb + ft * (c.flashB - cb)) : cb;
+            const a0 = UW_CAUSTICS_ALPHA * (1 + ft * 1.5);
+            const a1 = UW_CAUSTICS_ALPHA * 0.28 * (1 + ft);
+            const grad = ctx.createRadialGradient(x, y, 0, x, y, r);
+            grad.addColorStop(0,    `rgba(${dr},${dg},${db},${a0.toFixed(4)})`);
+            grad.addColorStop(0.4,  `rgba(${dr},${dg},${db},${a1.toFixed(4)})`);
+            grad.addColorStop(0.75, `rgba(${dr},${dg},${db},${(a0 * 0.04).toFixed(4)})`);
+            grad.addColorStop(1,    `rgba(${dr},${dg},${db},0)`);
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            if (c.shape === 1) {
+                ctx.ellipse(x, y, r * 1.1, r * 0.9, c.angle, 0, Math.PI * 2);
+            } else if (c.shape === 2) {
+                ctx.ellipse(x, y, r * 0.9, r * 1.1, c.angle, 0, Math.PI * 2);
+            } else {
+                ctx.ellipse(x, y, r, r, 0, 0, Math.PI * 2);
+            }
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    if (UW_PARTICLES_ENABLED && UW_PARTICLES_ALPHA > 0) {
+        ctx.save();
+        ctx.fillStyle = `rgb(${UW_PARTICLES_R},${UW_PARTICLES_G},${UW_PARTICLES_B})`;
+        for (const p of _uwParticles) {
+            ctx.globalAlpha = p.alpha * UW_PARTICLES_ALPHA;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.restore();
+    }
+}
+
+// RMS of the time-domain waveform — measures signal power and correlates well
+// with perceived loudness. Returns 0..1 (silence → full-scale square wave).
+function computePerceivedEnergy(analyser) {
+    if (!analyser) return 0;
+    if (!bgTimeDomainData || bgTimeDomainData.length !== analyser.fftSize) {
+        bgTimeDomainData = new Uint8Array(analyser.fftSize);
+    }
+    analyser.getByteTimeDomainData(bgTimeDomainData);
+    let sumSq = 0;
+    for (let i = 0; i < bgTimeDomainData.length; i++) {
+        const s = (bgTimeDomainData[i] - 128) / 128;
+        sumSq += s * s;
+    }
+    return Math.sqrt(sumSq / bgTimeDomainData.length);
+}
+
+// ─── Retro dither filter ──────────────────────────────────────────────────────
+// Bayer 4×4 ordered dithering matrix — values 0–15, used as threshold offsets
+// Bayer 4×4 ordered dithering matrix, flattened to a 16-entry array indexed by (y&3)*4+(x&3)
+const _BAYER4_FLAT = new Uint8Array([0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5]);
+
+// Precompute quantization LUT: lut[c*4096 + bayerVal*256 + inputByte] = outputByte.
+// Encodes all float arithmetic (tint, threshold, round-to-level) as a table lookup,
+// so the per-pixel loop only does 3 array reads per pixel instead of ~10 float ops.
+function _buildDitherLUT() {
+    const levels = Math.max(2, Math.round(DITHER_LEVELS));
+    const step   = 1 / (levels - 1);
+    const tstr   = DITHER_TINT_ENABLED ? DITHER_TINT_STR : 0;
+    const tint   = [DITHER_TINT_R / 255, DITHER_TINT_G / 255, DITHER_TINT_B / 255];
+    const lut    = new Uint8Array(3 * 16 * 256);
+    for (let c = 0; c < 3; c++) {
+        const tc   = tint[c];
+        const base = c * 4096;
+        for (let bv = 0; bv < 16; bv++) {
+            const thresh = (_BAYER4_FLAT[bv] / 16 - 0.5) * step;
+            const off    = base + bv * 256;
+            for (let inp = 0; inp < 256; inp++) {
+                let v = inp / 255;
+                if (tstr > 0) v = v * (1 - tstr) + tc * tstr;
+                v += thresh;
+                if (v < 0) v = 0; else if (v > 1) v = 1;
+                lut[off + inp] = Math.round(Math.round(v / step) * step * 255);
+            }
+        }
+    }
+    _ditherLUT = lut;
+}
+
+function applyDitherFilter() {
+    if (!DITHER_ENABLED) return;
+    const W = canvas.width, H = canvas.height;
+    const ps = Math.max(2, Math.round(DITHER_PIXEL_SIZE));
+    const dw = Math.max(1, Math.round(W / ps));
+    const dh = Math.max(1, Math.round(H / ps));
+
+    // Lazily create / resize the offscreen working canvas.
+    // willReadFrequently tells the browser to keep pixels CPU-accessible, avoiding
+    // a GPU→CPU pipeline stall on every getImageData call.
+    if (!_ditherCanvas || _ditherCanvas.width !== dw || _ditherCanvas.height !== dh) {
+        _ditherCanvas = document.createElement('canvas');
+        _ditherCanvas.width  = dw;
+        _ditherCanvas.height = dh;
+        _ditherCtx = _ditherCanvas.getContext('2d', { willReadFrequently: true });
+    }
+
+    // Lazily rebuild the quantization LUT when settings have changed.
+    if (!_ditherLUT) _buildDitherLUT();
+    const lut = _ditherLUT;
+
+    _ditherCtx.drawImage(canvas, 0, 0, dw, dh);
+    const imgData = _ditherCtx.getImageData(0, 0, dw, dh);
+    const d = imgData.data;
+
+    // Per-pixel loop: 3 LUT lookups per pixel, no float arithmetic.
+    // Each channel (R/G/B) uses a different Bayer row+col offset (c offset),
+    // producing chromatic fringing at gradients — the "sparkle" effect.
+    for (let y = 0; y < dh; y++) {
+        // Precompute per-row Bayer base indices for each channel (avoids (y+c)&3 inside x-loop)
+        const brR = (y    ) & 3;
+        const brG = (y + 1) & 3;
+        const brB = (y + 2) & 3;
+        let i = y * dw * 4;
+        for (let x = 0; x < dw; x++, i += 4) {
+            const bcR = (x    ) & 3;
+            const bcG = (x + 1) & 3;
+            const bcB = (x + 2) & 3;
+            d[i]   = lut[        _BAYER4_FLAT[brR * 4 + bcR] * 256 + d[i]  ];
+            d[i+1] = lut[4096  + _BAYER4_FLAT[brG * 4 + bcG] * 256 + d[i+1]];
+            d[i+2] = lut[8192  + _BAYER4_FLAT[brB * 4 + bcB] * 256 + d[i+2]];
+        }
+    }
+    _ditherCtx.putImageData(imgData, 0, 0);
+
+    // Upscale dithered result back at partial opacity so original colors bleed through
+    ctx.save();
+    ctx.globalAlpha = Math.min(1, Math.max(0, DITHER_OPACITY));
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'low';
+    ctx.drawImage(_ditherCanvas, 0, 0, W, H);
+    ctx.restore();
+
+    // Scanlines — cheap horizontal overlay, drawn after upscale for crispness
+    if (DITHER_SCAN_ENABLED && DITHER_SCAN_ALPHA > 0) {
+        ctx.save();
+        ctx.fillStyle = `rgba(0,0,0,${DITHER_SCAN_ALPHA})`;
+        const gap = Math.max(2, Math.round(DITHER_SCAN_GAP));
+        for (let y = 0; y < H; y += gap) ctx.fillRect(0, y, W, 1);
+        ctx.restore();
+    }
+}
+
+// ─── Render loop ──────────────────────────────────────────────────────────────
+function render() {
+    requestAnimationFrame(render);
+
+    let activeAnalyser = null;
+    if (liveMode && liveAnalyser && liveContext) {
+        liveAnalyser.getFloatFrequencyData(liveFreqData);
+        for (const blob of blobs) {
+            if (blob.detector) blob.detector.updateData(liveAnalyser, liveContext, liveFreqData);
+        }
+        if (subD) subD.updateData(liveAnalyser, liveContext, liveFreqData);
+        if (BLOB_FLASH_ENABLED && _flashDetector) _flashDetector.updateData(liveAnalyser, liveContext, liveFreqData);
+        if (PARTICLE_TRIGGER_ENABLED && _particleTrigDetector) _particleTrigDetector.updateData(liveAnalyser, liveContext, liveFreqData);
+        for (const clam of clams) { if (clam.detector) clam.detector.updateData(liveAnalyser, liveContext, liveFreqData); }
+        activeAnalyser = liveAnalyser;
+    } else if (manager && playing) {
+        manager.analyser.getFloatFrequencyData(manager.frequencyData);
+        for (const blob of blobs) {
+            if (blob.detector) blob.detector.updateData(manager.analyser, manager.context, manager.frequencyData);
+        }
+        if (subD) subD.updateData(manager.analyser, manager.context, manager.frequencyData);
+        if (BLOB_FLASH_ENABLED && _flashDetector) _flashDetector.updateData(manager.analyser, manager.context, manager.frequencyData);
+        if (PARTICLE_TRIGGER_ENABLED && _particleTrigDetector) _particleTrigDetector.updateData(manager.analyser, manager.context, manager.frequencyData);
+        for (const clam of clams) { if (clam.detector) clam.detector.updateData(manager.analyser, manager.context, manager.frequencyData); }
+        activeAnalyser = manager.analyser;
+    }
+    updateDetectorGraphs();
+
+    // Perceived energy — RMS, fast-attack / slow-release smoothing
+    const rmsEnergy = (BG_ENERGY_MAX_ALPHA > 0 || PARTICLE_ENERGY_ENABLED) ? computePerceivedEnergy(activeAnalyser) : 0;
+    const emaAlpha  = rmsEnergy > bgEnergySmooth ? 0.25 : 0.06;
+    bgEnergySmooth  = emaAlpha * rmsEnergy + (1 - emaAlpha) * bgEnergySmooth;
+
+    const _now = performance.now();
+    const _dt  = _lastRenderMs > 0 ? _now - _lastRenderMs : 16.7;
+    _lastRenderMs = _now;
+    if (_now - _lastPlaybarMs >= 250) { updatePlaybackBar(); _lastPlaybarMs = _now; }
+
+    // Background
+    if (frameCount === 0) {
+        ctx.fillStyle = `rgb(${BG_R},${BG_G},${BG_B})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    } else {
+        ctx.fillStyle = `rgba(${BG_R},${BG_G},${BG_B},${BG_TRAIL_ALPHA})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    frameCount++;
+
+    // Energy-driven background brightening — white overlay scaled by smoothed RMS
+    if (bgEnergySmooth > 0.001 && BG_ENERGY_MAX_ALPHA > 0) {
+        ctx.fillStyle = `rgba(255,255,255,${(bgEnergySmooth * BG_ENERGY_MAX_ALPHA).toFixed(4)})`;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // 150 Hz background wash — pale greyish-blue band rising from the bottom.
+    // Full color at the very bottom, fading to transparent over the lower ~38% of the screen.
+    // Overall intensity is driven by subD.parameter (fades in then out with the beat).
+    if (subD && subD.parameter > 0) {
+        const a      = subD.parameter;
+        const cW     = canvas.width;
+        const cH     = canvas.height;
+        const bandH  = cH * SUB_BAND_HEIGHT;
+        const grad   = ctx.createLinearGradient(0, cH - bandH, 0, cH);
+        const col    = `${SUB_R|0}, ${SUB_G|0}, ${SUB_B|0}`;
+        grad.addColorStop(0, `rgba(${col}, 0)`);
+        grad.addColorStop(1, `rgba(${col}, ${(a * SUB_MAX_ALPHA).toFixed(3)})`);
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, cH - bandH, cW, bandH);
+    }
+
+    // Underwater effects — caustic light dapples and floating particle drift
+    updateUnderwater(_dt);
+    drawUnderwater();
+
+    // Beat triggers — blob reaction + effects + log
+    if (subD && subD.justTriggered) {
+        lastSubLogTime = logBeat('Sub', lastSubLogTime, '#e04060');
+    }
+    if (BLOB_FLASH_ENABLED && _flashDetector && _flashDetector.justTriggered) {
+        triggerBlobFlash();
+    }
+    if (PARTICLE_TRIGGER_ENABLED && _particleTrigDetector && _particleTrigDetector.justTriggered) {
+        triggerParticleCurrent();
+    }
+    for (let bi = 0; bi < blobs.length; bi++) {
+        const blob = blobs[bi];
+        if (blob.detector && blob.detector.justTriggered) {
+            triggerBlobBeat(bi);
+            triggerBlobEffect(blob);
+            blob._lastLogTime = logBeat(blob.name, blob._lastLogTime, blob.color);
+            blob.triggerTimes.push(_now);
+        }
+    }
+    for (let ci = 0; ci < clams.length; ci++) {
+        const clam = clams[ci];
+        if (clam.detector && clam.detector.justTriggered) {
+            triggerClamBeat(ci);
+            triggerBlobEffect(clam);   // reuse same effect system (shockwave/polygon/sparks)
+            clam._lastLogTime = logBeat(clam.name, clam._lastLogTime, clam.color);
+            clam.triggerTimes.push(_now);
+        }
+    }
+
+    // Solo/duo state updates — must run after justTriggered is readable.
+    // updateDuoLinks reads activitySmooth written by updateSpotlights, so order matters.
+    updateSpotlights(_dt);
+    updateDuoLinks(_dt);
+
+    // Physics
+    updateBlobs();
+    updateClams();
+
+    // Draw — spotlights → duo links → clams → blobs → effects
+    drawSpotlights();
+    drawDuoLinks();
+    drawClams();
+    drawBlobs();
+    drawShockwaves();
+    drawPolygonFlashes();
+    drawSparks();
+    applyDitherFilter();
+
+    // Panel
+    drawEQ();
+    drawDetectorGraphs();
+}
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+resizeCanvas();
+initBlobs();
+buildSliders();
+buildJelliList();
+loadFileList();
+window.addEventListener('resize', resizeCanvas);
+
+// ─── Creature drag interaction (jellyfish + clams) ───────────────────────────
+const DRAG_DETECT_R = 130;   // px — click must be within this radius of a creature center
+
+function creatureUnderCursor(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    let nearest = null, nearestDist = Infinity, isClam = false;
+    for (const blob of blobs) {
+        const d = Math.hypot(x - blob.cx, y - blob.cy);
+        if (d < DRAG_DETECT_R && d < nearestDist) { nearest = blob; nearestDist = d; isClam = false; }
+    }
+    for (const clam of clams) {
+        const d = Math.hypot(x - clam.cx, y - clam.cy);
+        if (d < DRAG_DETECT_R && d < nearestDist) { nearest = clam; nearestDist = d; isClam = true; }
+    }
+    return { creature: nearest, isClam, x, y };
+}
+
+canvas.addEventListener('mousedown', e => {
+    const { creature, isClam, x, y } = creatureUnderCursor(e.clientX, e.clientY);
+    if (!creature) return;
+    if (isClam) { draggedClam = creature; } else { draggedBlob = creature; }
+    dragCursorX = x;
+    dragCursorY = y;
+    _dragVelX = 0;
+    _dragVelY = 0;
+    canvas.style.cursor = 'grabbing';
+    e.preventDefault();
+});
+
+canvas.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    const { creature, isClam } = creatureUnderCursor(e.clientX, e.clientY);
+    if (!creature) return;
+    _editTarget  = { entity: creature, type: isClam ? 'clam' : 'jelli' };
+    _spawnType   = isClam ? 'clam' : 'jelli';
+    document.getElementById('spawn-modal-title').textContent = isClam ? 'Edit Clam' : 'Edit Jellyfish';
+    document.getElementById('sp-name').value   = creature.name;
+    document.getElementById('sp-hz').value     = creature.detectorHz;
+    document.getElementById('sp-color').value  = creature.color;
+    document.getElementById('sp-effect').value = creature.effect;
+    document.getElementById('sp-ecol').value   = creature.effectColor;
+    spEspeed.value = creature.effectSpeed;
+    spEspeedVal.textContent = creature.effectSpeed.toFixed(1) + '×';
+    spKick.value   = creature.kickScale;
+    spKickVal.textContent = creature.kickScale.toFixed(1) + '×';
+    spawnOkBtn.textContent = 'Apply';
+    spawnModal.classList.add('open');
+});
+
+canvas.addEventListener('mousemove', e => {
+    const rect = canvas.getBoundingClientRect();
+    const newX = e.clientX - rect.left;
+    const newY = e.clientY - rect.top;
+    // Smooth mouse velocity for momentum-on-release
+    _dragVelX = _dragVelX * 0.6 + (newX - dragCursorX) * 0.4;
+    _dragVelY = _dragVelY * 0.6 + (newY - dragCursorY) * 0.4;
+    dragCursorX = newX;
+    dragCursorY = newY;
+    if (!draggedBlob && !draggedClam) {
+        // Hover feedback — show grab cursor when over a creature
+        const { creature } = creatureUnderCursor(e.clientX, e.clientY);
+        canvas.style.cursor = creature ? 'grab' : 'default';
+    }
+});
+
+document.addEventListener('mouseup', () => {
+    if (draggedBlob) {
+        draggedBlob.cvx += _dragVelX * DRAG_MOMENTUM;
+        draggedBlob.cvy += _dragVelY * DRAG_MOMENTUM;
+        draggedBlob = null;
+    }
+    if (draggedClam) {
+        draggedClam.cvx += _dragVelX * DRAG_MOMENTUM;
+        draggedClam.cvy += _dragVelY * DRAG_MOMENTUM;
+        draggedClam = null;
+    }
+    canvas.style.cursor = 'default';
+});
+
+canvas.addEventListener('mouseleave', () => {
+    draggedBlob = null;
+    draggedClam = null;
+    canvas.style.cursor = 'default';
+});
+
+render();
+</script>
+
+<div id="spawn-modal">
+  <div id="spawn-card">
+    <h3 id="spawn-modal-title">New Jellyfish</h3>
+    <div class="sp-row">
+      <span class="sp-lbl">Name</span>
+      <input type="text" id="sp-name" value="Jelli" maxlength="20">
+    </div>
+    <div class="sp-row">
+      <span class="sp-lbl">Hz</span>
+      <input type="number" id="sp-hz" min="20" max="20000" value="100">
+    </div>
+    <div class="sp-row">
+      <span class="sp-lbl">Body Color</span>
+      <input type="color" id="sp-color" value="#00c8ff">
+    </div>
+    <div class="sp-row">
+      <span class="sp-lbl">Effect</span>
+      <select id="sp-effect">
+        <option value="none">None</option>
+        <option value="shockwave">Shockwave Ring</option>
+        <option value="polygon">Polygon Flash</option>
+        <option value="sparks">Spark Burst</option>
+      </select>
+    </div>
+    <div class="sp-row">
+      <span class="sp-lbl">Effect Color</span>
+      <input type="color" id="sp-ecol" value="#00c8ff">
+    </div>
+    <div class="sp-row">
+      <span class="sp-lbl">Effect Speed</span>
+      <input type="range" id="sp-espeed" min="0.2" max="5" step="0.1" value="1">
+      <span class="sp-val" id="sp-espeed-val">1.0×</span>
+    </div>
+    <div class="sp-row">
+      <span class="sp-lbl">Kick Scale</span>
+      <input type="range" id="sp-kick" min="0.1" max="3" step="0.1" value="1">
+      <span class="sp-val" id="sp-kick-val">1.0×</span>
+    </div>
+    <div id="spawn-actions">
+      <button id="spawn-cancel">Cancel</button>
+      <button id="spawn-ok">Spawn</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

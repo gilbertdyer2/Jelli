@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Beat Sender</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #111;
+      color: #ccc;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 16px;
+      min-width: 420px;
+    }
+
+    .usage-note {
+      background: #0d1a2e;
+      border-left: 3px solid #3377cc;
+      padding: 8px 12px;
+      margin-bottom: 14px;
+      line-height: 1.6;
+      color: #99bbdd;
+    }
+    .usage-note code {
+      background: #1a2a3a;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #aaddff;
+    }
+
+    section {
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 10px 12px;
+      margin-bottom: 10px;
+    }
+    section h2 {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #555;
+      margin-bottom: 8px;
+    }
+
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    label { color: #888; }
+
+    input[type="text"],
+    input[type="number"] {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 3px;
+      color: #ddd;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 3px 7px;
+      width: 160px;
+    }
+    input[type="number"] { width: 70px; }
+    input:focus { outline: none; border-color: #3377cc; }
+
+    .status-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-dot.disconnected { background: #444; }
+    .status-dot.connecting   { background: #cc9900; }
+    .status-dot.connected    { background: #22aa55; }
+    .status-dot.error        { background: #cc2222; }
+
+    #ws-label, #capture-status { color: #777; }
+
+    button {
+      background: #1a1a1a;
+      border: 1px solid #3377cc;
+      border-radius: 3px;
+      color: #88bbee;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 4px 14px;
+    }
+    button:hover { background: #1e2a3a; }
+    button:active { background: #162030; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    thead th {
+      text-align: left;
+      color: #555;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 4px 10px;
+      border-bottom: 1px solid #222;
+    }
+    tbody tr { border-bottom: 1px solid #1a1a1a; }
+    tbody tr:hover { background: #161616; }
+    tbody td { padding: 5px 10px; color: #aaa; }
+    tbody td:first-child { color: #ddd; }
+
+    .flash-dot {
+      display: inline-block;
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: #2a2a2a;
+      transition: background 0.05s, box-shadow 0.05s;
+    }
+    .flash-dot.lit {
+      background: #ffdd00;
+      box-shadow: 0 0 7px #ffdd00;
+    }
+
+    input[type="checkbox"] { accent-color: #3377cc; cursor: pointer; }
+
+    /* Dashboard */
+    #dashboard-section table { margin-top: 4px; }
+    #dashboard-section thead th { padding: 4px 8px; }
+    #dashboard-section tbody td { padding: 5px 8px; vertical-align: top; }
+    #dashboard-section .device-id { color: #555; font-size: 11px; }
+    #dashboard-section .rtt-val { color: #88bbee; }
+    #dashboard-section .mapping-cell label {
+      margin-right: 5px;
+      font-size: 11px;
+      color: #888;
+      white-space: nowrap;
+    }
+    #dashboard-section .mapping-cell label:hover { color: #ccc; }
+    #last-updated { color: #444; font-size: 11px; }
+    #no-clients { color: #444; font-size: 12px; padding: 4px 0; }
+  </style>
+</head>
+<body>
+
+<p class="usage-note">
+  1. Start desktop server: <code>python desktop_server.py</code> (port 9000)<br>
+  2. Start Pi client: <code>python device_client.py --server ws://THIS_MACHINE_IP:9000</code><br>
+  3. Serve this page: <code>python -m http.server 8000</code> → open <code>http://localhost:8000/beat_sender.html</code><br>
+  Connect below to <code>localhost:9000</code>, then start capture. In the screen-share dialog enable <strong>Share system audio</strong>.
+</p>
+
+<section>
+  <h2>Connection</h2>
+  <div class="row">
+    <label>Host</label>
+    <input id="host" type="text" value="127.0.0.1">
+    <label>Port</label>
+    <input id="port" type="number" value="9002">
+    <span class="status-dot disconnected" id="ws-dot"></span>
+    <span id="ws-label">Disconnected</span>
+  </div>
+</section>
+
+<section>
+  <h2>Capture</h2>
+  <div class="row">
+    <button id="start-btn">Start Capture</button>
+    <span id="capture-status">Idle</span>
+  </div>
+</section>
+
+<section>
+  <h2>Detectors</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Hz</th>
+        <th>Enabled</th>
+        <th>Trigger</th>
+      </tr>
+    </thead>
+    <tbody id="detector-body"></tbody>
+  </table>
+</section>
+
+<section id="dashboard-section">
+  <h2>Connected Devices</h2>
+  <div id="no-clients">No clients connected.</div>
+  <table id="client-table" style="display:none">
+    <thead>
+      <tr>
+        <th>Device</th>
+        <th>Status</th>
+        <th>RTT</th>
+        <th>Registered Triggers</th>
+        <th>Trigger Mapping</th>
+      </tr>
+    </thead>
+    <tbody id="client-body"></tbody>
+  </table>
+  <div class="row" style="margin-top:8px">
+    <button id="refresh-btn">Refresh</button>
+    <span id="last-updated"></span>
+  </div>
+</section>
+
+<script type="module">
+import { BeatDetector } from './package/AudioVisualizer_WebGL_Claude/BeatDetector.js';
+
+const DETECTOR_CONFIGS = [
+  { id: 'bass',       targetHz: 60,    rangeHz: 15,  octaves: 1, triggerDuration: 8,  defaultOn: true  },
+  { id: 'mid',        targetHz: 375,   rangeHz: 60,  octaves: 2, triggerDuration: 8,  defaultOn: true  },
+  { id: 'high',       targetHz: 12000, rangeHz: 500, octaves: 2, triggerDuration: 6,  defaultOn: true  },
+  { id: 'membrane',   targetHz: 200,   rangeHz: 30,  octaves: 1, triggerDuration: 8,  defaultOn: false },
+  { id: 'mb_trig',    targetHz: 150,   rangeHz: 20,  octaves: 1, triggerDuration: 10, defaultOn: false },
+  { id: 'bg_shift',   targetHz: 100,   rangeHz: 15,  octaves: 1, triggerDuration: 10, defaultOn: false },
+  { id: 'oral',       targetHz: 500,   rangeHz: 80,  octaves: 2, triggerDuration: 8,  defaultOn: false },
+  { id: 'oral_tint',  targetHz: 800,   rangeHz: 100, octaves: 2, triggerDuration: 8,  defaultOn: false },
+  { id: 'jelly_tint', targetHz: 2000,  rangeHz: 200, octaves: 2, triggerDuration: 6,  defaultOn: false },
+  { id: 'ds_trig',    targetHz: 5000,  rangeHz: 400, octaves: 2, triggerDuration: 6,  defaultOn: false },
+];
+
+// id → { detector, enabled, flashEl }
+const detectorMap = new Map();
+
+function buildTable() {
+  const tbody = document.getElementById('detector-body');
+  for (const cfg of DETECTOR_CONFIGS) {
+    const detector = new BeatDetector({
+      targetHz:        cfg.targetHz,
+      rangeHz:         cfg.rangeHz,
+      octaves:         cfg.octaves,
+      triggerDuration: cfg.triggerDuration,
+      name:            cfg.id,
+    });
+
+    const flashEl = document.createElement('span');
+    flashEl.className = 'flash-dot';
+
+    const checkbox = document.createElement('input');
+    checkbox.type    = 'checkbox';
+    checkbox.checked = cfg.defaultOn;
+    checkbox.addEventListener('change', () => {
+      detectorMap.get(cfg.id).enabled = checkbox.checked;
+      if (!checkbox.checked) detector.reset();
+    });
+
+    const row    = document.createElement('tr');
+    const idTd   = document.createElement('td'); idTd.textContent = cfg.id;
+    const hzTd   = document.createElement('td'); hzTd.textContent = cfg.targetHz;
+    const enTd   = document.createElement('td'); enTd.appendChild(checkbox);
+    const dotTd  = document.createElement('td'); dotTd.appendChild(flashEl);
+    row.append(idTd, hzTd, enTd, dotTd);
+    tbody.appendChild(row);
+
+    detectorMap.set(cfg.id, { detector, enabled: cfg.defaultOn, flashEl });
+  }
+}
+
+// ── WebSocket ──────────────────────────────────────────────────────────────
+
+let ws = null;
+let wsShouldReconnect = true;
+
+function connectWs() {
+  const host = document.getElementById('host').value.trim();
+  const port = document.getElementById('port').value.trim();
+  setWsStatus('connecting');
+
+  ws = new WebSocket(`ws://${host}:${port}`);
+  ws.onopen = () => {
+    setWsStatus('connected');
+    ws.send(JSON.stringify({ type: 'dashboard_register' }));
+    requestClientList();
+  };
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'client_list') updateDashboard(msg.clients);
+    } catch (_) {}
+  };
+  ws.onerror = () => setWsStatus('error');
+  ws.onclose = () => {
+    setWsStatus('disconnected');
+    if (wsShouldReconnect) setTimeout(connectWs, 2000);
+  };
+}
+
+function reconnectWs() {
+  wsShouldReconnect = false;
+  if (ws) ws.close();
+  wsShouldReconnect = true;
+  connectWs();
+}
+
+function setWsStatus(state) {
+  const labels = { connecting: 'Connecting…', connected: 'Connected',
+                   disconnected: 'Disconnected', error: 'Error' };
+  document.getElementById('ws-dot').className   = `status-dot ${state}`;
+  document.getElementById('ws-label').textContent = labels[state] ?? state;
+}
+
+function sendTriggers(ids) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'triggers', ids }));
+  }
+}
+
+// ── Audio capture ──────────────────────────────────────────────────────────
+
+let audioCtx  = null;
+let analyser  = null;
+let freqData  = null;
+let rafId     = null;
+let capturing = false;
+
+async function startCapture() {
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      audio: true,
+      video: { frameRate: { ideal: 1 } },
+    });
+  } catch (err) {
+    if (err.name !== 'AbortError' && err.name !== 'NotAllowedError') {
+      setCaptureStatus('Audio unavailable');
+    }
+    return;
+  }
+
+  stream.getVideoTracks().forEach(t => t.stop());
+
+  const audioTracks = stream.getAudioTracks();
+  if (!audioTracks.length) {
+    setCaptureStatus('No audio track — enable "Share system audio"');
+    stream.getTracks().forEach(t => t.stop());
+    return;
+  }
+
+  audioCtx = new AudioContext();
+  analyser = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  audioCtx.createMediaStreamSource(stream).connect(analyser);
+  freqData = new Float32Array(analyser.frequencyBinCount);
+
+  for (const { detector } of detectorMap.values()) detector.reset();
+
+  capturing = true;
+  setCaptureStatus('Capturing…');
+  document.getElementById('start-btn').textContent = 'Stop Capture';
+
+  audioTracks[0].addEventListener('ended', stopCapture);
+
+  rafId = requestAnimationFrame(tick);
+}
+
+function stopCapture() {
+  capturing = false;
+  if (rafId !== null) { cancelAnimationFrame(rafId); rafId = null; }
+  if (audioCtx)       { audioCtx.close(); audioCtx = null; }
+  analyser = null;
+  freqData = null;
+  for (const { detector } of detectorMap.values()) detector.reset();
+  setCaptureStatus('Idle');
+  document.getElementById('start-btn').textContent = 'Start Capture';
+}
+
+function setCaptureStatus(msg) {
+  document.getElementById('capture-status').textContent = msg;
+}
+
+// ── RAF tick ───────────────────────────────────────────────────────────────
+
+function tick() {
+  if (!capturing) return;
+  rafId = requestAnimationFrame(tick);
+
+  analyser.getFloatFrequencyData(freqData);
+
+  const triggered = [];
+  for (const [id, { detector, enabled, flashEl }] of detectorMap) {
+    if (!enabled) continue;
+    detector.updateData(analyser, audioCtx, freqData);
+    if (detector.justTriggered) {
+      triggered.push(id);
+      flashEl.classList.add('lit');
+      setTimeout(() => flashEl.classList.remove('lit'), 200);
+    }
+  }
+
+  if (triggered.length > 0) sendTriggers(triggered);
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────────────
+
+const ALL_TRIGGER_IDS = [
+  'bass','mid','high','bg_shift','oral','oral_tint',
+  'jelly_tint','membrane','mb_trig','ds_trig',
+];
+
+// deviceId → Set of currently mapped trigger IDs
+const deviceMappings = new Map();
+
+function requestClientList() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'get_clients' }));
+  }
+}
+
+function sendFrequencyMap() {
+  const map = {};
+  for (const [deviceId, set] of deviceMappings) {
+    map[deviceId] = [...set];
+  }
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'frequency_map', map }));
+  }
+}
+
+function onMappingChange(e) {
+  const { deviceId, triggerId } = e.target.dataset;
+  if (!deviceMappings.has(deviceId)) deviceMappings.set(deviceId, new Set());
+  const set = deviceMappings.get(deviceId);
+  if (e.target.checked) set.add(triggerId); else set.delete(triggerId);
+  sendFrequencyMap();
+}
+
+function updateDashboard(clients) {
+  const tbody  = document.getElementById('client-body');
+  const table  = document.getElementById('client-table');
+  const noMsg  = document.getElementById('no-clients');
+
+  tbody.innerHTML = '';
+  if (!clients.length) {
+    table.style.display = 'none';
+    noMsg.style.display = '';
+    return;
+  }
+  table.style.display = '';
+  noMsg.style.display = 'none';
+
+  // Pre-populate mapping state from server data (preserves local edits if keys match)
+  for (const c of clients) {
+    if (!deviceMappings.has(c.device_id)) {
+      deviceMappings.set(c.device_id, new Set(c.mapped_triggers));
+    }
+  }
+
+  for (const c of clients) {
+    const row = document.createElement('tr');
+
+    // Device label + id
+    const devTd = document.createElement('td');
+    devTd.innerHTML = `<strong>${c.device_label}</strong><br>
+      <span class="device-id">${c.device_id}</span>`;
+
+    // Status dot
+    const statusTd = document.createElement('td');
+    statusTd.innerHTML = '<span class="status-dot connected"></span>';
+
+    // RTT
+    const rttTd = document.createElement('td');
+    rttTd.className = 'rtt-val';
+    rttTd.textContent = c.rtt_ms != null ? `${c.rtt_ms.toFixed(1)} ms` : '—';
+
+    // Registered subscriptions
+    const subTd = document.createElement('td');
+    subTd.style.fontSize = '11px';
+    subTd.style.color = '#666';
+    subTd.textContent = c.subscriptions.join(', ') || '(all)';
+
+    // Mapping checkboxes
+    const mapTd = document.createElement('td');
+    mapTd.className = 'mapping-cell';
+    const currentMap = deviceMappings.get(c.device_id) || new Set(c.mapped_triggers);
+    for (const tid of ALL_TRIGGER_IDS) {
+      const lbl = document.createElement('label');
+      const cb  = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = currentMap.has(tid);
+      cb.dataset.deviceId  = c.device_id;
+      cb.dataset.triggerId = tid;
+      cb.addEventListener('change', onMappingChange);
+      lbl.appendChild(cb);
+      lbl.append(' ' + tid);
+      mapTd.appendChild(lbl);
+    }
+
+    row.append(devTd, statusTd, rttTd, subTd, mapTd);
+    tbody.appendChild(row);
+  }
+
+  document.getElementById('last-updated').textContent =
+    'Updated ' + new Date().toLocaleTimeString();
+}
+
+// ── Init ───────────────────────────────────────────────────────────────────
+
+document.addEventListener('DOMContentLoaded', () => {
+  buildTable();
+  connectWs();
+
+  document.getElementById('start-btn').addEventListener('click', () => {
+    if (capturing) stopCapture(); else startCapture();
+  });
+
+  document.getElementById('host').addEventListener('change', reconnectWs);
+  document.getElementById('port').addEventListener('change', reconnectWs);
+  document.getElementById('refresh-btn').addEventListener('click', requestClientList);
+
+  // Fallback poll — server also pushes proactively on state changes
+  setInterval(requestClientList, 5000);
+});
+</script>
+</body>
+</html>

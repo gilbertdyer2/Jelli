@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+<style>
+canvas { border: 1px solid black; display: block; }
+#main-wrap { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+#left-column { flex: 0 0 auto; }
+#trigger-log-panel { flex: 0 0 240px; border: 1px solid #333; background: #1a1a1a; padding: 8px; max-height: 800px; display: flex; flex-direction: column; }
+#trigger-log-panel h3 { margin: 0 0 8px 0; font-size: 13px; color: #aaa; }
+#trigger-log-list { overflow-y: auto; font-family: monospace; font-size: 12px; color: #ccc; line-height: 1.5; }
+#trigger-log-list .entry { padding: 2px 0; border-bottom: 1px solid #2a2a2a; white-space: nowrap; }
+#trigger-log-list .entry .ts { color: #8af; }
+#trigger-log-list .entry .since { color: #8c8; }
+#trigger-log-list .entry .name { color: #fa8; }
+</style>
+</head>
+<body>
+
+<div id="main-wrap">
+<div id="left-column">
+<label for="audioFileSelect">Audio file: </label>
+<select id="audioFileSelect"></select>
+<button id="playButton">Play Audio</button>
+
+<div style="margin: 8px 0;">
+    <label for="bassListenerHz">Bass listener (Hz): </label><input type="number" id="bassListenerHz" min="20" max="200" value="58" step="1" style="width: 64px;">
+    <label for="midListenerHz" style="margin-left: 12px;">Mid listener (Hz): </label><input type="number" id="midListenerHz" min="50" max="2000" value="375" step="1" style="width: 64px;">
+    <button type="button" id="resetListenersButton" style="margin-left: 12px;">Reset listeners</button>
+</div>
+<input type="checkbox" id="ToggleScreenShake" checked>Enable Screen Shake
+<input type="checkbox" id="ToggleTunnelRotation">Enable Tunnel Rotation
+<input type="checkbox" id="ToggleFlashEffect">Enable Flash Effect (Small Flash Warning)
+<input type="checkbox" id="RenderOctahedron" checked>Render Octahedron
+<input type="checkbox" id="RenderWireframes">Render Octahedron Inner Wireframes
+<input type="checkbox" id="RenderOctahedronOutline" checked>Render Octahedron Outline
+<input type="checkbox" id="RenderTunnel" checked>Render Tunnel
+<input type="checkbox" id="SmoothMode">Smooth mode (Twixtor-style tunnel + cube)
+<label for="TwixtorLength" style="margin-left: 8px;">Twixtor length:</label>
+<input type="range" id="TwixtorLength" min="0" max="100" value="100" step="1" style="width: 100px; vertical-align: middle;" title="Lower = shorter effect (snappier)">
+<input type="checkbox" id="Freeze">Freeze
+<input type="checkbox" id="ShowEQView" checked>Show EQ View
+<input type="checkbox" id="BeatMinInterval">Min trigger interval
+<input type="number" id="BeatMinIntervalMs" min="0" max="2000" value="150" step="10" style="width: 56px;" title="Ignore triggers within this many ms"> ms
+
+
+
+
+<div style="margin: 10px 0;">
+    <input type="range" id="seekSlider" min="0" max="100" value="0" step="0.1" style="width: 768px;">
+    <span id="currentTime">0:00</span> / <span id="duration">0:00</span>
+</div>
+
+
+<canvas id="gl-canvas" width="768" height="768">
+Oops ... your browser doesn't support the HTML5 canvas element
+</canvas>
+<div id="eq-container" style="margin-top: 8px;">
+    <canvas id="eq-canvas" width="768" height="260" style="display: block; border: 1px solid #333; background: #111;"></canvas>
+    <div style="font-size: 11px; color: #666;">Frequency (Hz) → &nbsp;&nbsp;|&nbsp;&nbsp; ↑ dB</div>
+</div>
+</div>
+
+<div id="trigger-log-panel">
+    <h3>Trigger log</h3>
+    <div id="trigger-log-list"></div>
+</div>
+</div>
+
+<script id="vertex-shader" type="x-shader/x-vertex">
+attribute vec4 vPosition;
+// uniform float loudness;
+
+attribute vec3 vNormal;
+varying vec4 fColor;
+
+uniform vec4 ambientProduct, diffuseProduct, specularProduct;
+uniform mat4 modelViewMatrix;
+uniform mat4 projectionMatrix;
+uniform vec4 lightPosition;
+uniform float shininess;
+
+void main()
+{
+
+    vec3 pos = -(modelViewMatrix * vPosition).xyz;
+    
+    //fixed light postion
+    
+    vec3 light = lightPosition.xyz;
+    vec3 L = normalize( light - pos );
+
+	
+    vec3 E = normalize( -pos );
+    vec3 H = normalize( L + E );
+    
+    vec4 NN = vec4(vNormal,0);
+
+    // Transform vertex normal into eye coordinates
+       
+    vec3 N = normalize( (modelViewMatrix*NN).xyz);
+
+    // Compute terms in the illumination equation
+    vec4 ambient = ambientProduct;
+
+    float Kd = max( dot(L, N), 0.0 );
+    vec4  diffuse = Kd*diffuseProduct;
+
+    float Ks = pow( max(dot(N, H), 0.0), shininess );
+    vec4  specular = Ks * specularProduct;
+    
+    if( dot(L, N) < 0.0 ) {
+	specular = vec4(0.0, 0.0, 0.0, 1.0);
+    } 
+
+    gl_Position = projectionMatrix * modelViewMatrix * vPosition;
+
+    fColor = ambient + diffuse +specular;
+    fColor.a = 1.0;
+}
+</script>
+
+<script id="fragment-shader" type="x-shader/x-fragment">
+precision mediump float;
+
+varying vec4 fColor;
+
+void main()
+{
+    gl_FragColor = fColor;
+    gl_FragColor[3] = 0.4;
+}
+</script>
+
+<script type="text/javascript" src="Common/webgl-utils.js"></script>
+<script type="text/javascript" src="Common/initShaders.js"></script>
+<script type="text/javascript" src="Common/MV.js"></script>
+<script type="module" src="loudnessUtils.js"></script>
+<script type="module" src="audioVisualizer.js"></script>
+</body>
+</html>

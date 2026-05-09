@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find:*)",
+      "Bash(node:*)",
+      "Bash(cmd.exe /c \"where node\")",
+      "Read(//c/Users/gdyer/AppData/Roaming/**)",
+      "Read(//c/Users/gdyer/AppData/Local/Programs//**)",
+      "Read(//c/ProgramData/chocolatey/bin//**)",
+      "Bash(export:*)",
+      "Bash(\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VisualStudio/NodeJs/node.exe\" --version && \"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VisualStudio/NodeJs/npm.cmd\" --version 2>/dev/null || echo \"npm not found at that path\")",
+      "Bash(NODE=\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VisualStudio/NodeJs/node.exe\"\nNPM_CLI=\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VisualStudio/NodeJs/node_modules/npm/bin/npm-cli.js\"\ncd /c/Users/gdyer/Documents/CS-Projects/AudioVisualizer_WebGL_Claude\n\"$NODE\" \"$NPM_CLI\" create vite@5.5.5 . -- --template svelte-ts 2>&1)",
+      "Bash(cd:*)",
+      "Bash(PATH=\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VisualStudio/NodeJs:$PATH\" node ./node_modules/vite/bin/vite.js build 2>&1 | tail -20)",
+      "Bash(PATH=\"/c/Program Files/Microsoft Visual Studio/2022/Community/MSBuild/Microsoft/VisualStudio/NodeJs:$PATH\" node ./node_modules/vite/bin/vite.js build 2>&1 | tail -8)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\\\\node.exe\" ./node_modules/vite/bin/vite.js build 2>&1)",
+      "Bash(\"C:\\\\Program Files\\\\Microsoft Visual Studio\\\\2022\\\\Community\\\\MSBuild\\\\Microsoft\\\\VisualStudio\\\\NodeJs\\\\node.exe\" ./node_modules/vite/bin/vite.js build)",
+      "Bash(grep -n \"createProgram\\\\|compileShader\\\\|createFramebuffer\\\\|createTexture\\\\|createBuffer\" /c/Users/gdyer/Documents/CS-Projects/AudioVisualizer_WebGL_Claude/src/renderer/*.ts)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\gdyer\\\\Documents\\\\CS-Projects\\\\AudioVisualizer_WebGL_Claude\\\\src\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)"
+    ]
+  }
+}

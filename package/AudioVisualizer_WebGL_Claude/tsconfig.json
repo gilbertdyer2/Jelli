@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "resolveJsonModule": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "strict": true,
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+    "paths": {
+      "@stores/*": ["./src/stores/*"],
+      "@renderer/*": ["./src/renderer/*"],
+      "@components/*": ["./src/components/*"],
+      "@audio/*": ["./src/audio/*"],
+      "@creatures/*": ["./src/creatures/*"],
+      "@types": ["./src/types/index.ts"],
+      "@utils/*": ["./src/utils/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "src/**/*.svelte", "vite.config.ts"]
+}
