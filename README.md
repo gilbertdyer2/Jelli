@@ -1,5 +1,6 @@
 # Jelli
-(In development)
+(Note: In development!)
+
 A real-time audio visualizer that reacts to desktop audio and renders on a Raspberry Pi OLED display. Beat detection runs on a Windows desktop and streams trigger events over WebSocket to one or more Pi clients, which animate a WebGL jellyfish visualizer on a 128×128 SPI OLED.
 
 ## Hardware
